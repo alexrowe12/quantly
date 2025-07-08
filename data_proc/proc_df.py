@@ -10,6 +10,7 @@ def proc_df(csv_path: str) -> pd.DataFrame:
     df = df.set_index('date')
 
     df = df[~df.index.duplicated(keep='first')]
+    df.sort_index(inplace=True)
 
     return df
 
