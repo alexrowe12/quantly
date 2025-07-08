@@ -1,5 +1,3 @@
-# backtest.py
-
 import pandas as pd
 
 from strategy.main import tick
@@ -12,33 +10,23 @@ from data_proc.calc_indicators_full import (
     calculate_wma_full,
 )
 
-# ───────────────────────────────────────────────────────────────────────────────
-# USER‐CONFIGURABLE FREQUENCY:
-#   '1T'   = 1 minute
-#   '5T'   = 5 minutes
-#   '30T'  = 30 minutes
-#   '1h'   = 1 hour    ← lowercase 'h' to avoid FutureWarning
-#   '4h'   = 4 hours
-#   '1D'   = 1 day
-#   '1W'   = 1 week
 FREQUENCY = '1h'
-# ───────────────────────────────────────────────────────────────────────────────
 
 def main():
-    # 1) load, dedupe & sort
     df = proc_df('./data/data.csv')
 
-    # 2) compute indicators
     df = calculate_rsi_full(df, period=14)
     df = calculate_macd_full(df, fast=12, slow=26, signal=9)
     df = calculate_sma_full(df, period=20)
     df = calculate_ema_full(df, period=20)
     df = calculate_wma_full(df, period=20)
 
-    # 3) (redundant if proc_df already sorted) ensure monotonic index
     df.sort_index(inplace=True)
 
-    # 4) pick resampled points
+    portfolio_value = 1_000_000.0
+    entry_price = None
+    trade_capital = 0.0
+
     tick_points = (
         df
         .resample(FREQUENCY)
@@ -46,9 +34,21 @@ def main():
         .dropna(subset=['close', 'rsi'])
     )
 
-    # 5) backtest: only at those times
     for ts in tick_points.index:
-        tick(df, ts)
+        real_ts = df.index.asof(ts)
+        signal = tick(df, ts)
+        if signal == 1:
+            entry_price = df.at[real_ts, 'close']
+            trade_capital = portfolio_value * 0.5
+        elif signal == -1 and entry_price is not None:
+            exit_price = df.at[real_ts, 'close']
+            profit = trade_capital * (exit_price - entry_price) / entry_price
+            portfolio_value += profit
+            print(f"Trade P/L: {profit:,.2f}   New portfolio value: {portfolio_value:,.2f}")
+            entry_price = None
+            trade_capital = 0.0
+
+    print(f"\nFinal portfolio value: {portfolio_value:,.2f}")
 
 if __name__ == '__main__':
     main()
