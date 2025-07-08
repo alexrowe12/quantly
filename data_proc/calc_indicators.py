@@ -104,7 +104,7 @@ def calculate_wma(data: pd.DataFrame, idx, period: int = 20, column: str = 'clos
     return np.dot(window.values, weights) / weights.sum()
 
 
-def calc_indicators(
+def calculate_all_indicators(
     data: pd.DataFrame,
     idx,
     rsi_period: int = 14,

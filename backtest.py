@@ -1,14 +1,26 @@
-from data_proc.proc_df import proc_df
-from data_proc.calc_indicators import calculate_all_indicators
+import pandas as pd
+
+from data_proc.proc_df               import proc_df
+from data_proc.calc_indicators_full import (
+    calculate_rsi_full,
+    calculate_macd_full,
+    calculate_sma_full,
+    calculate_ema_full,
+    calculate_wma_full,
+)
 
 df = proc_df('./data/data.csv')
 
-print('Data loaded')
+df = calculate_rsi_full(df, period=14)
+df = calculate_macd_full(df, fast=12, slow=26, signal=9)
+df = calculate_sma_full(df, period=20)
+df = calculate_ema_full(df, period=20)
+df = calculate_wma_full(df, period=20)
 
-for i in df.index:
-    values = calculate_all_indicators(df, i)
-    for col, val in values.items():
-        df.at[i, col] = val
+with pd.option_context('display.max_rows', 300):
+    print(df.head(300))
 
-# Probably need to use a sliding window somehow or it'll be incredibly slow
-# Maybe can calculate based on the last value? And if there is no last value, run the first calculation
+
+for ts, row in df.iterrows():
+    # Strategy logic
+    pass
