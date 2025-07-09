@@ -3,3 +3,4 @@ qenv/
 data/
 figma_assets/
 .vscode/
+strategy/__pycache__/
