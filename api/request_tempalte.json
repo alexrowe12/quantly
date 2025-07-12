@@ -1,0 +1,11 @@
+{
+    "ticker": "SPY",
+    "buy_strategies": [
+        ["function", "trade_percent", "p1", "p2"],
+        ["rsi_oversold", 0.3, 25]
+    ],
+    "sell_strategies": [
+        ["function", "trade_percent", "p1", "p2"],
+        ["rsi_overbought", 0.3, 75]
+    ]
+}
