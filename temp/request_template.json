@@ -1,0 +1,29 @@
+{
+    "ticker": "SPY",
+    "starting_value": 1000000,
+    "buy_strategies": [
+        {
+            "name": "function",
+            "trade_percent": "percent",
+            "threshold": "threshold"
+        },
+        {
+            "name": "rsi_oversold",
+            "trade_percent": 0.3,
+            "threshold": 25
+        }
+
+    ],
+    "sell_strategies": [
+        {
+            "name": "function",
+            "trade_percent": "percent",
+            "threshold": "threshold"
+        },
+        {
+            "name": "rsi_overbought",
+            "trade_percent": 0.3,
+            "threshold": 75
+        }
+    ]
+}

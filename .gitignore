@@ -4,3 +4,4 @@ data/
 figma_assets/
 .vscode/
 strategy/__pycache__/
+.env

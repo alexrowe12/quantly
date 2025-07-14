@@ -1,0 +1,12 @@
+{
+    "status": "running",
+    "b_id": "backtestYYMMDDHHMMSS",
+    "result": {
+        "starting_value": 1000000,
+        "final_value": 1234567,
+        "trades": [
+            ["buy", 404.27, "2023-01-01T10:00:00Z"],
+            ["sell", 421.13, "2023-02-05T10:00:00Z"]
+        ]
+    }
+}
