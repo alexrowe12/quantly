@@ -108,6 +108,8 @@ def run_backtest(
             "timestamp": df.index[-1].isoformat()
         })
 
+    final_value = round(portfolio_value, 2)
+    
     return {
         "starting_value": starting_value,
         "final_value":     portfolio_value,
