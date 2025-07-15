@@ -1,0 +1,2 @@
+cd /Users/alexrowe/Desktop/Quantly/frontend
+npm run dev
