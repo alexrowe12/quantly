@@ -1,6 +1,19 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional
+from sqlalchemy import Column, Text, TIMESTAMP, Numeric, BigInteger
+from .db import Base
 
+class PriceData(Base):
+    __tablename__ = "price_data"
+
+    ticker    = Column(Text,       primary_key=True)
+    timestamp = Column(TIMESTAMP,  primary_key=True)
+    open      = Column(Numeric,    nullable=False)
+    high      = Column(Numeric,    nullable=False)
+    low       = Column(Numeric,    nullable=False)
+    close     = Column(Numeric,    nullable=False)
+    volume    = Column(BigInteger, nullable=False)
+    
 class StrategyConfig(BaseModel):
     name: str
     trade_percent: float = Field(..., gt=0, lt=1, description="Fraction of portfolio to trade")
