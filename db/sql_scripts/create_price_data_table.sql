@@ -1,3 +1,5 @@
+-- Script used to initially create the price_data postgres table
+
 CREATE TABLE price_data (
   ticker    TEXT     NOT NULL,
   timestamp TIMESTAMPTZ NOT NULL,

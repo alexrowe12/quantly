@@ -1,12 +1,10 @@
+# Calculate indicators at a single given index, useful for trading while iterating through
+
 import pandas as pd
 import numpy as np
 
-
+# Calculate RSI at a given index
 def calculate_rsi(data: pd.DataFrame, idx, period: int = 14) -> float:
-    """
-    Calculate the RSI at a given index (timestamp or position).
-    Returns -1 if there isn't enough history (period + 1 points).
-    """
     try:
         pos = data.index.get_loc(idx)
     except KeyError:
@@ -27,12 +25,8 @@ def calculate_rsi(data: pd.DataFrame, idx, period: int = 14) -> float:
     rsi = 100 - (100 / (1 + rs))
     return rsi
 
-
+# Calculate MACD
 def calculate_macd(data: pd.DataFrame, idx, fast: int = 12, slow: int = 26, signal: int = 9) -> tuple:
-    """
-    Calculate MACD, signal line, and histogram at a given index.
-    Returns a tuple (macd, signal_line, hist), or (-1, -1, -1) if insufficient data.
-    """
     try:
         pos = data.index.get_loc(idx)
     except KeyError:
@@ -51,12 +45,8 @@ def calculate_macd(data: pd.DataFrame, idx, fast: int = 12, slow: int = 26, sign
     hist = macd - signal_line
     return macd, signal_line, hist
 
-
+# Calculate simple moving average
 def calculate_sma(data: pd.DataFrame, idx, period: int = 20) -> float:
-    """
-    Calculate simple moving average at a given index.
-    Returns -1 if insufficient data.
-    """
     try:
         pos = data.index.get_loc(idx)
     except KeyError:
@@ -68,12 +58,8 @@ def calculate_sma(data: pd.DataFrame, idx, period: int = 20) -> float:
     window = data['close'].iloc[pos+1-period:pos+1]
     return window.mean()
 
-
+# Calculate exponential moving average
 def calculate_ema(data: pd.DataFrame, idx, period: int = 20, column: str = 'close') -> float:
-    """
-    Calculate exponential moving average at a given index.
-    Returns -1 if insufficient data.
-    """
     try:
         pos = data.index.get_loc(idx)
     except KeyError:
@@ -85,12 +71,8 @@ def calculate_ema(data: pd.DataFrame, idx, period: int = 20, column: str = 'clos
     series = data[column].iloc[:pos+1]
     return series.ewm(span=period, adjust=False).mean().iloc[-1]
 
-
+# Calculate weighted moving average
 def calculate_wma(data: pd.DataFrame, idx, period: int = 20, column: str = 'close') -> float:
-    """
-    Calculate weighted moving average at a given index.
-    Returns -1 if insufficient data.
-    """
     try:
         pos = data.index.get_loc(idx)
     except KeyError:
@@ -103,7 +85,7 @@ def calculate_wma(data: pd.DataFrame, idx, period: int = 20, column: str = 'clos
     weights = np.arange(1, period + 1)
     return np.dot(window.values, weights) / weights.sum()
 
-
+# Call each function from one master function
 def calculate_all_indicators(
     data: pd.DataFrame,
     idx,
@@ -115,9 +97,6 @@ def calculate_all_indicators(
     ema_period: int = 20,
     wma_period: int = 20
 ) -> dict:
-    """
-    Calculate all indicators at a given index and return a dict of values.
-    """
     # RSI
     rsi_val = calculate_rsi(data, idx, rsi_period)
     # MACD

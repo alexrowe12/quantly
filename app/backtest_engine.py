@@ -1,3 +1,5 @@
+# API engine to run trading strategies on historical price data
+
 import pandas as pd
 from datetime import datetime
 import uuid
@@ -12,7 +14,7 @@ from strategy.main import (
     wma_buy,     wma_sell,
 )
 
-# map strategy names → functions
+# Map strategy names to functions
 STRATEGY_MAP = {
     "rsi_oversold":  rsi_oversold,
     "rsi_overbought":rsi_overbought,
@@ -26,6 +28,7 @@ STRATEGY_MAP = {
     "wma_sell":      wma_sell,
 }
 
+# Main backtest simulation engine
 def run_backtest(
     ticker: str,
     starting_value: float,
@@ -34,6 +37,7 @@ def run_backtest(
     freq: str = "1D",
     data_path_template: str = "./data/data.csv"
 ) -> dict:
+    # Load and prepare data
     df = proc_df(data_path_template.format(ticker=ticker))
     from data_proc.calc_indicators_full import (
         calculate_rsi_full,
@@ -42,6 +46,8 @@ def run_backtest(
         calculate_ema_full,
         calculate_wma_full,
     )
+
+    # Calculate technical indicators and assign strategies
     df = calculate_rsi_full(df, period=14)
     df = calculate_macd_full(df, fast=12, slow=26, signal=9)
     df = calculate_sma_full(df, period=20)
@@ -58,6 +64,7 @@ def run_backtest(
     entry_price       = None
     trades: list      = []
 
+    # Create time ticks
     ticks = (
         df
         .resample(freq)
@@ -65,6 +72,7 @@ def run_backtest(
         .dropna(subset=["close", "rsi"])
     )
 
+    # Iterate through ticks and place trades
     for ts in ticks.index:
         real_ts = df.index.asof(ts)
         if pd.isna(real_ts):
@@ -98,6 +106,7 @@ def run_backtest(
             })
             entry_price = None
 
+    # Close out final trade if still open when backtest reaches end of data
     if entry_price is not None:
         last_price = df["close"].iloc[-1]
         profit = committed_capital * (last_price - entry_price) / entry_price
@@ -108,8 +117,8 @@ def run_backtest(
             "timestamp": df.index[-1].isoformat()
         })
 
+    # Round to the nearest cent and return as json
     final_value = round(portfolio_value, 2)
-    
     return {
         "starting_value": starting_value,
         "final_value":     portfolio_value,

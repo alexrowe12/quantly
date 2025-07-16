@@ -1,12 +1,12 @@
+# Defines trading strategy logic
+
 import pandas as pd
 
 positions = {}
 position_open = False
 
+# Record a buy
 def buy(timestamp, price, info):
-    """
-    Record a buy (no print here—backtest.py handles all output).
-    """
     global position_open
     if position_open:
         return
@@ -19,10 +19,8 @@ def buy(timestamp, price, info):
     }
     position_open = True
 
+# Record a sell
 def sell(timestamp, price, info):
-    """
-    Record a sell (no print here—backtest.py handles all output).
-    """
     global position_open
     if not position_open:
         return
@@ -35,6 +33,7 @@ def sell(timestamp, price, info):
     }
     position_open = False
 
+# Below this are buy and sell strategies corresponding to each calculated indicator
 def rsi_oversold(window: pd.DataFrame, threshold: float = 20):
     val = window['rsi'].iloc[-1]
     return val < threshold, {'strategy': 'rsi_oversold', 'value': val, 'threshold': threshold}
@@ -127,6 +126,7 @@ sell_strategies = [
     # wma_sell
 ]
 
+# Iterates through the dataframe and makes trades when a strategy is triggered, docstring shows schema
 def tick(full_df: pd.DataFrame, ts):
     """
     Returns (signal, info):

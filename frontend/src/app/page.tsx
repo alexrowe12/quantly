@@ -1,4 +1,5 @@
-// app/backtest/page.tsx
+// Frontend interface that lets user run backtests on the API
+
 "use client";
 
 import { useState } from "react";

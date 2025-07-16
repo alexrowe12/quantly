@@ -1,6 +1,9 @@
+# Calculates indicators for every timestamp in the df, and appends them to each row of the df
+
 import pandas as pd
 import numpy as np
 
+# Calculate RSI
 def calculate_rsi_full(data: pd.DataFrame, period: int = 14) -> pd.DataFrame:
     """Add a {period}-period RSI column."""
     print('Calculating RSI | Period: ' + str(period))
@@ -15,6 +18,7 @@ def calculate_rsi_full(data: pd.DataFrame, period: int = 14) -> pd.DataFrame:
     data['rsi']  = 100 - (100 / (1 + rs))
     return data
 
+# Calculate MACD
 def calculate_macd_full(data: pd.DataFrame,
                    fast: int = 12, slow: int = 26, signal: int = 9) -> pd.DataFrame:
     """Add MACD line, Signal line, and Histogram columns."""
@@ -29,12 +33,14 @@ def calculate_macd_full(data: pd.DataFrame,
     data['macd_hist']   = macd_line - signal_line
     return data
 
+# Calculate simple moving average
 def calculate_sma_full(data: pd.DataFrame, period: int = 20) -> pd.DataFrame:
     """Add a simple moving average of the 'close' price."""
     print('Calculating SMA | Period: ' + str(period))
     data[f'ma_{period}'] = data['close'].rolling(window=period).mean()
     return data
 
+# Calculate exponential moving average
 def calculate_ema_full(data: pd.DataFrame, period: int = 20,
                   column: str = 'close') -> pd.DataFrame:
     """Add an Exponential Moving Average column. Uses pandas' EWM with `span=period`."""
@@ -42,6 +48,7 @@ def calculate_ema_full(data: pd.DataFrame, period: int = 20,
     data[f'ema_{period}'] = data[column].ewm(span=period, adjust=False).mean()
     return data
 
+# Calculate weighted moving average
 def calculate_wma_full(data: pd.DataFrame, period: int = 20,
                   column: str = 'close') -> pd.DataFrame:
     """Add a Weighted Moving Average column. More weight on recent prices: 1, 2, …, period."""
@@ -58,6 +65,7 @@ def calculate_wma_full(data: pd.DataFrame, period: int = 20,
     )
     return data
 
+# Call each function from one master function
 def calc_indicators_full(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
 
@@ -71,6 +79,7 @@ def calc_indicators_full(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
+# Logic for when this script is run directly
 if __name__ == '__main__':
     df = calc_indicators_full('../data/data.csv')
     print('------------------------------')

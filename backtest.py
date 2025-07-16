@@ -1,3 +1,5 @@
+# Another local backtest engine
+
 import pandas as pd
 
 from strategy.main import tick

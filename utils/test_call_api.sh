@@ -1,3 +1,5 @@
+# Test script to see if api is working locally
+
 curl -X POST http://localhost:8000/api/backtest \
   -H "Content-Type: application/json" \
   -H "X-API-KEY: supersecret123" \

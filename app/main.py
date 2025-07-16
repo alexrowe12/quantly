@@ -1,3 +1,5 @@
+# Defines FastAPI web service layer, exposes HTTP API endpoints
+
 import os
 import uuid
 from datetime import datetime

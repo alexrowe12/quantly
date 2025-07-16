@@ -1,3 +1,5 @@
+# defines data models for db schema (SQLAlchemy ORM) and API request/response schemas (Pydantic).
+
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from sqlalchemy import Column, Text, TIMESTAMP, Numeric, BigInteger

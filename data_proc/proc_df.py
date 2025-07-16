@@ -1,3 +1,5 @@
+# Processes the initial csv into a clean dataframe
+
 import pandas as pd
 
 def proc_df(csv_path: str) -> pd.DataFrame:
@@ -14,6 +16,7 @@ def proc_df(csv_path: str) -> pd.DataFrame:
 
     return df
 
+# Logic for when this script is run directly
 if __name__ == '__main__':
     df = proc_df('../data/data.csv')
     print('------------------------------')
