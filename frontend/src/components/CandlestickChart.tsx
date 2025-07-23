@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   ComposedChart,
   Bar,
@@ -92,22 +92,31 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
   const [yDomain, setYDomain] = useState<[number, number]>([dataMin - 5, dataMax + 5]);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Transform data for candlestick representation
-  const transformedData = data.map(candle => ({
-    timestamp: candle.timestamp,
-    high: candle.high,
-    low: candle.low,
-    openClose: [candle.open, candle.close],
-    fill: candle.close > candle.open ? '#10b981' : '#ef4444', // Green for up, red for down
-    volume: candle.volume,
-    ...candle
-  }));
+  // Use useMemo to ensure data transformation is synchronized with domain changes
+  const transformedData = useMemo(() => {
+    return data
+      .filter(candle => {
+        // Only show candles that have some part visible in the current domain
+        const candleMin = Math.min(candle.low, candle.open, candle.close, candle.high);
+        const candleMax = Math.max(candle.low, candle.open, candle.close, candle.high);
+        return candleMax >= yDomain[0] && candleMin <= yDomain[1];
+      })
+      .map(candle => ({
+        timestamp: candle.timestamp,
+        high: candle.high,
+        low: candle.low,
+        openClose: [candle.open, candle.close],
+        fill: candle.close > candle.open ? '#10b981' : '#ef4444', // Green for up, red for down
+        volume: candle.volume,
+        ...candle
+      }));
+  }, [data, yDomain]);
 
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
       
-      const zoomFactor = 0.3; // More aggressive zoom
+      const zoomFactor = 0.1; // Gentle zoom
       const isZoomIn = e.deltaY < 0;
       
       setYDomain(([currentMin, currentMax]) => {
@@ -123,9 +132,9 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
           newRange = currentRange * (1 + zoomFactor);
         }
         
-        // Set very liberal limits to allow extreme zooming
+        // Set limits to show max 50% above/below price extremes
         const minAllowedRange = 0.1; // Allow zooming to $0.10 range
-        const maxAllowedRange = dataRange * 20; // Allow zooming out to 20x original range
+        const maxAllowedRange = dataRange * 1.5; // Allow zooming out to 50% above/below extremes
         
         // Clamp the range
         newRange = Math.max(minAllowedRange, Math.min(maxAllowedRange, newRange));
@@ -191,6 +200,7 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
     <div ref={containerRef} className={`w-full h-full ${className}`}>
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart
+          key={`${yDomain[0]}-${yDomain[1]}`}
           data={transformedData}
           margin={{ top: 20, right: 60, left: 20, bottom: 5 }}
         >
