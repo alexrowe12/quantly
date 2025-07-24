@@ -66,19 +66,23 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
   const [startIndex, setStartIndex] = useState(0);
   const [endIndex, setEndIndex] = useState(30);
   const containerRef = useRef<HTMLDivElement>(null);
+  const yAxisRef = useRef<HTMLDivElement>(null);
   
-  // Calculate fixed Y-axis domain based on all data with 20% padding
+  // Calculate base Y-axis domain based on all data with 20% padding
   const allPrices = data.map(d => d.price);
   const minPrice = Math.min(...allPrices);
   const maxPrice = Math.max(...allPrices);
   const priceRange = maxPrice - minPrice;
-  const yMin = minPrice - (priceRange * 0.2);
-  const yMax = maxPrice + (priceRange * 0.2);
+  const baseYMin = minPrice - (priceRange * 0.2);
+  const baseYMax = maxPrice + (priceRange * 0.2);
+  
+  // State for current Y-axis zoom
+  const [yDomain, setYDomain] = useState<[number, number]>([baseYMin, baseYMax]);
   
   const visibleData = data.slice(startIndex, endIndex + 1);
   
   useEffect(() => {
-    const handleWheel = (e: WheelEvent) => {
+    const handleTimeScroll = (e: WheelEvent) => {
       e.preventDefault();
       
       const scrollAmount = Math.sign(e.deltaY) * 1;
@@ -89,12 +93,122 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
       setEndIndex(newEndIndex);
     };
 
+    const handleYAxisZoom = (e: WheelEvent) => {
+      e.preventDefault();
+      
+      const zoomFactor = 0.05; // Small adjustment per scroll tick
+      const isZoomOut = e.deltaY > 0;
+      
+      setYDomain(([currentMin, currentMax]) => {
+        const currentRange = currentMax - currentMin;
+        const center = (currentMin + currentMax) / 2;
+        
+        let newRange: number;
+        if (isZoomOut) {
+          // Zoom out - increase range
+          newRange = currentRange * (1 + zoomFactor);
+        } else {
+          // Zoom in - decrease range
+          newRange = currentRange * (1 - zoomFactor);
+        }
+        
+        // Set limits
+        const minAllowedRange = priceRange; // Can't zoom tighter than actual data range
+        const maxAllowedRange = priceRange * 3.4; // Can't zoom out more than triple + original padding
+        
+        // Clamp the range
+        newRange = Math.max(minAllowedRange, Math.min(maxAllowedRange, newRange));
+        
+        const halfRange = newRange / 2;
+        const newMin = center - halfRange;
+        const newMax = center + halfRange;
+        
+        return [newMin, newMax];
+      });
+    };
+
     const container = containerRef.current;
     if (container) {
-      container.addEventListener('wheel', handleWheel, { passive: false });
-      return () => container.removeEventListener('wheel', handleWheel);
+      container.addEventListener('wheel', handleTimeScroll, { passive: false });
     }
-  }, [startIndex, data.length]);
+
+    return () => {
+      if (container) {
+        container.removeEventListener('wheel', handleTimeScroll);
+      }
+    };
+  }, [startIndex, data.length, priceRange]);
+
+  // Separate effect for Y-axis zoom detection
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      const container = containerRef.current;
+      if (!container) return;
+
+      const rect = container.getBoundingClientRect();
+      const isOverYAxis = e.clientX >= rect.left + rect.width - 80; // Y-axis is in the right margin area
+
+      if (isOverYAxis) {
+        container.style.cursor = 'ns-resize';
+      } else {
+        container.style.cursor = 'default';
+      }
+    };
+
+    const handleYAxisWheel = (e: WheelEvent) => {
+      const container = containerRef.current;
+      if (!container) return;
+
+      const rect = container.getBoundingClientRect();
+      const isOverYAxis = e.clientX >= rect.left + rect.width - 80; // Y-axis is in the right margin area
+
+      if (isOverYAxis) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const zoomFactor = 0.05; // Small adjustment per scroll tick
+        const isZoomOut = e.deltaY > 0;
+        
+        setYDomain(([currentMin, currentMax]) => {
+          const currentRange = currentMax - currentMin;
+          const center = (currentMin + currentMax) / 2;
+          
+          let newRange: number;
+          if (isZoomOut) {
+            // Zoom out - increase range
+            newRange = currentRange * (1 + zoomFactor);
+          } else {
+            // Zoom in - decrease range
+            newRange = currentRange * (1 - zoomFactor);
+          }
+          
+          // Set limits
+          const minAllowedRange = priceRange; // Can't zoom tighter than actual data range
+          const maxAllowedRange = priceRange * 3.4; // Can't zoom out more than triple + original padding
+          
+          // Clamp the range
+          newRange = Math.max(minAllowedRange, Math.min(maxAllowedRange, newRange));
+          
+          const halfRange = newRange / 2;
+          const newMin = center - halfRange;
+          const newMax = center + halfRange;
+          
+          return [newMin, newMax];
+        });
+      }
+    };
+
+    const container = containerRef.current;
+    if (container) {
+      container.addEventListener('mousemove', handleMouseMove);
+      container.addEventListener('wheel', handleYAxisWheel, { passive: false, capture: true });
+      
+      return () => {
+        container.removeEventListener('mousemove', handleMouseMove);
+        container.removeEventListener('wheel', handleYAxisWheel, { capture: true });
+      };
+    }
+  }, [priceRange]);
 
   const formatXAxisLabel = (tickItem: string) => {
     const date = new Date(tickItem);
@@ -107,13 +221,13 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
   };
 
   return (
-    <div ref={containerRef} className={`w-full h-full ${className}`}>
+    <div ref={containerRef} className={`w-full h-full ${className}`} style={{ backgroundColor: 'rgb(31, 31, 31)', outline: 'none' }}>
       <ResponsiveContainer width="100%" height="100%">
         <LineChart
           data={visibleData}
-          margin={{ top: 10, right: 10, left: 10, bottom: 40 }}
+          margin={{ top: 80, right: 80, left: 80, bottom: 80 }}
         >
-          <CartesianGrid strokeDasharray="3 3" stroke="#e0e7ff" />
+          <CartesianGrid stroke="#6b7280" strokeWidth={1} opacity={0.7} />
           <XAxis 
             dataKey="timestamp"
             tickFormatter={formatXAxisLabel}
@@ -121,9 +235,11 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
             textAnchor="end"
             height={40}
             tick={{ fontSize: 12, fill: '#6b7280' }}
+            interval={1}
           />
           <YAxis 
-            domain={[yMin, yMax]}
+            orientation="right"
+            domain={yDomain}
             tickFormatter={(value) => `$${value.toFixed(0)}`}
             tick={{ fontSize: 12, fill: '#6b7280' }}
           />
