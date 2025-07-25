@@ -146,7 +146,7 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
       if (!container) return;
 
       const rect = container.getBoundingClientRect();
-      const isOverYAxis = e.clientX >= rect.left + rect.width - 80; // Y-axis is in the right margin area
+      const isOverYAxis = e.clientX >= rect.right - 80; // Y-axis is in the right margin area
 
       if (isOverYAxis) {
         container.style.cursor = 'ns-resize';
@@ -160,7 +160,7 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
       if (!container) return;
 
       const rect = container.getBoundingClientRect();
-      const isOverYAxis = e.clientX >= rect.left + rect.width - 80; // Y-axis is in the right margin area
+      const isOverYAxis = e.clientX >= rect.right - 80; // Y-axis is in the right margin area
 
       if (isOverYAxis) {
         e.preventDefault();
