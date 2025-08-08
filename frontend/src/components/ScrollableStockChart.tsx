@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   LineChart,
   Line,
@@ -65,8 +65,12 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
 }) => {
   const [startIndex, setStartIndex] = useState(0);
   const [endIndex, setEndIndex] = useState(30);
+  const [isScrollingYAxis, setIsScrollingYAxis] = useState(false);
+  const [isScrollingXAxis, setIsScrollingXAxis] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const yAxisRef = useRef<HTMLDivElement>(null);
+  const yAxisTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const xAxisTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Calculate base Y-axis domain based on all data with 20% padding
   const allPrices = data.map(d => d.price);
@@ -81,9 +85,27 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
   
   const visibleData = data.slice(startIndex, endIndex + 1);
   
+  // Create stable timeout functions using useCallback
+  const resetXAxisColor = useCallback(() => {
+    setIsScrollingXAxis(false);
+  }, []);
+
+  const resetYAxisColor = useCallback(() => {
+    setIsScrollingYAxis(false);
+  }, []);
+  
   useEffect(() => {
     const handleTimeScroll = (e: WheelEvent) => {
       e.preventDefault();
+      
+      // Set X-axis as actively scrolling
+      setIsScrollingXAxis(true);
+      
+      // Clear existing timeout and set new one
+      if (xAxisTimeoutRef.current) {
+        clearTimeout(xAxisTimeoutRef.current);
+      }
+      xAxisTimeoutRef.current = setTimeout(resetXAxisColor, 300);
       
       const scrollAmount = Math.sign(e.deltaY) * 1;
       const newStartIndex = Math.max(0, Math.min(data.length - 30, startIndex + scrollAmount));
@@ -136,6 +158,10 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
       if (container) {
         container.removeEventListener('wheel', handleTimeScroll);
       }
+      // Cleanup timeouts
+      if (xAxisTimeoutRef.current) {
+        clearTimeout(xAxisTimeoutRef.current);
+      }
     };
   }, [startIndex, data.length, priceRange]);
 
@@ -145,8 +171,23 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
       const container = containerRef.current;
       if (!container) return;
 
-      const rect = container.getBoundingClientRect();
-      const isOverYAxis = e.clientX >= rect.left + rect.width - 80; // Y-axis is in the right margin area
+      // Find the actual Y-axis elements in the DOM
+      const yAxisElements = container.querySelectorAll('.recharts-yAxis, .recharts-cartesian-axis-tick');
+      let isOverYAxis = false;
+
+      // Check if mouse is over any Y-axis element
+      for (const element of yAxisElements) {
+        const elementRect = element.getBoundingClientRect();
+        if (
+          e.clientX >= elementRect.left &&
+          e.clientX <= elementRect.right &&
+          e.clientY >= elementRect.top &&
+          e.clientY <= elementRect.bottom
+        ) {
+          isOverYAxis = true;
+          break;
+        }
+      }
 
       if (isOverYAxis) {
         container.style.cursor = 'ns-resize';
@@ -159,12 +200,36 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
       const container = containerRef.current;
       if (!container) return;
 
-      const rect = container.getBoundingClientRect();
-      const isOverYAxis = e.clientX >= rect.left + rect.width - 80; // Y-axis is in the right margin area
+      // Find the actual Y-axis elements in the DOM
+      const yAxisElements = container.querySelectorAll('.recharts-yAxis, .recharts-cartesian-axis-tick');
+      let isOverYAxis = false;
+
+      // Check if mouse is over any Y-axis element
+      for (const element of yAxisElements) {
+        const elementRect = element.getBoundingClientRect();
+        if (
+          e.clientX >= elementRect.left &&
+          e.clientX <= elementRect.right &&
+          e.clientY >= elementRect.top &&
+          e.clientY <= elementRect.bottom
+        ) {
+          isOverYAxis = true;
+          break;
+        }
+      }
 
       if (isOverYAxis) {
         e.preventDefault();
         e.stopPropagation();
+        
+        // Set Y-axis as actively scrolling
+        setIsScrollingYAxis(true);
+        
+        // Clear existing timeout and set new one
+        if (yAxisTimeoutRef.current) {
+          clearTimeout(yAxisTimeoutRef.current);
+        }
+        yAxisTimeoutRef.current = setTimeout(resetYAxisColor, 300);
         
         const zoomFactor = 0.05; // Small adjustment per scroll tick
         const isZoomOut = e.deltaY > 0;
@@ -206,9 +271,30 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
       return () => {
         container.removeEventListener('mousemove', handleMouseMove);
         container.removeEventListener('wheel', handleYAxisWheel, { capture: true });
+        // Cleanup timeouts
+        if (yAxisTimeoutRef.current) {
+          clearTimeout(yAxisTimeoutRef.current);
+        }
       };
     }
   }, [priceRange]);
+
+  // Safety cleanup effect to ensure colors always reset
+  useEffect(() => {
+    return () => {
+      // Clear timeouts and reset colors on unmount
+      if (xAxisTimeoutRef.current) {
+        clearTimeout(xAxisTimeoutRef.current);
+        xAxisTimeoutRef.current = null;
+      }
+      if (yAxisTimeoutRef.current) {
+        clearTimeout(yAxisTimeoutRef.current);
+        yAxisTimeoutRef.current = null;
+      }
+      setIsScrollingXAxis(false);
+      setIsScrollingYAxis(false);
+    };
+  }, []);
 
   const formatXAxisLabel = (tickItem: string) => {
     const date = new Date(tickItem);
@@ -225,23 +311,22 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
       <ResponsiveContainer width="100%" height="100%">
         <LineChart
           data={visibleData}
-          margin={{ top: 80, right: 80, left: 80, bottom: 80 }}
+          margin={{ top: 20, right: 0, left: 20, bottom: 40 }}
         >
-          <CartesianGrid stroke="#6b7280" strokeWidth={1} opacity={0.7} />
           <XAxis 
             dataKey="timestamp"
             tickFormatter={formatXAxisLabel}
             angle={-45}
             textAnchor="end"
             height={40}
-            tick={{ fontSize: 12, fill: '#6b7280' }}
+            tick={{ fontSize: 12, fill: isScrollingXAxis ? '#ffffff' : '#6b7280' }}
             interval={1}
           />
           <YAxis 
             orientation="right"
             domain={yDomain}
             tickFormatter={(value) => `$${value.toFixed(0)}`}
-            tick={{ fontSize: 12, fill: '#6b7280' }}
+            tick={{ fontSize: 12, fill: isScrollingYAxis ? '#ffffff' : '#6b7280' }}
           />
           <Tooltip 
             labelFormatter={formatTooltipLabel}
