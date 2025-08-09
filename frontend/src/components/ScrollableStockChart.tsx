@@ -71,6 +71,7 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
   const yAxisRef = useRef<HTMLDivElement>(null);
   const yAxisTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const xAxisTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastScrollTimeRef = useRef<number>(0);
   
   // Calculate base Y-axis domain based on all data with 20% padding
   const allPrices = data.map(d => d.price);
@@ -87,7 +88,11 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
   
   // Create stable timeout functions using useCallback
   const resetXAxisColor = useCallback(() => {
-    setIsScrollingXAxis(false);
+    const now = Date.now();
+    // Only reset if enough time has passed since last scroll
+    if (now - lastScrollTimeRef.current >= 250) {
+      setIsScrollingXAxis(false);
+    }
   }, []);
 
   const resetYAxisColor = useCallback(() => {
@@ -98,6 +103,9 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
     const handleTimeScroll = (e: WheelEvent) => {
       e.preventDefault();
       
+      // Update last scroll time
+      lastScrollTimeRef.current = Date.now();
+      
       // Set X-axis as actively scrolling
       setIsScrollingXAxis(true);
       
@@ -105,7 +113,7 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
       if (xAxisTimeoutRef.current) {
         clearTimeout(xAxisTimeoutRef.current);
       }
-      xAxisTimeoutRef.current = setTimeout(resetXAxisColor, 300);
+      xAxisTimeoutRef.current = setTimeout(resetXAxisColor, 400);
       
       const scrollAmount = Math.sign(e.deltaY) * 1;
       const newStartIndex = Math.max(0, Math.min(data.length - 30, startIndex + scrollAmount));
@@ -164,6 +172,16 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
       }
     };
   }, [startIndex, data.length, priceRange]);
+
+  // Effect to reset X-axis color when data actually updates
+  useEffect(() => {
+    // Small delay to allow chart to render new data
+    const timeoutId = setTimeout(() => {
+      setIsScrollingXAxis(false);
+    }, 100);
+
+    return () => clearTimeout(timeoutId);
+  }, [startIndex, endIndex]);
 
   // Separate effect for Y-axis zoom detection
   useEffect(() => {
@@ -307,7 +325,7 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
   };
 
   return (
-    <div ref={containerRef} className={`w-full h-full ${className}`} style={{ backgroundColor: 'rgb(31, 31, 31)', outline: 'none' }}>
+    <div ref={containerRef} className={`w-full h-full ${className}`} style={{ backgroundColor: '#1F1F1F', outline: 'none' }}>
       <ResponsiveContainer width="100%" height="100%">
         <LineChart
           data={visibleData}
@@ -319,14 +337,14 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
             angle={-45}
             textAnchor="end"
             height={40}
-            tick={{ fontSize: 12, fill: isScrollingXAxis ? '#ffffff' : '#6b7280' }}
+            tick={{ fontSize: 12, fill: isScrollingXAxis ? '#F9FAFB' : '#6b7280' }}
             interval={1}
           />
           <YAxis 
             orientation="right"
             domain={yDomain}
             tickFormatter={(value) => `$${value.toFixed(0)}`}
-            tick={{ fontSize: 12, fill: isScrollingYAxis ? '#ffffff' : '#6b7280' }}
+            tick={{ fontSize: 12, fill: isScrollingYAxis ? '#F9FAFB' : '#6b7280' }}
           />
           <Tooltip 
             labelFormatter={formatTooltipLabel}
@@ -335,16 +353,16 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
               backgroundColor: '#1f2937',
               border: '1px solid #374151',
               borderRadius: '6px',
-              color: '#f9fafb'
+              color: '#F9FAFB'
             }}
           />
           <Line 
             type="monotone" 
             dataKey="price" 
-            stroke="#3b82f6" 
+            stroke="#F9FAFB" 
             strokeWidth={2}
             dot={false}
-            activeDot={{ r: 4, fill: '#3b82f6' }}
+            activeDot={{ r: 4, fill: '#F9FAFB' }}
           />
         </LineChart>
       </ResponsiveContainer>
