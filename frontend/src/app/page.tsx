@@ -1,4 +1,5 @@
 import ScrollableStockChart from "@/components/ScrollableStockChart";
+import StrategyPanel from "@/components/StrategyPanel";
 
 export default function Home() {
   return (
@@ -41,9 +42,17 @@ export default function Home() {
         </div>
       </div>
       
-      {/* Chart Container */}
-      <div className="flex-1">
-        <ScrollableStockChart />
+      {/* Main Content Area */}
+      <div className="flex-1 flex">
+        {/* Left Panel - 30% width */}
+        <div className="w-[30%]" style={{ backgroundColor: '#1F1F1F' }}>
+          <StrategyPanel />
+        </div>
+        
+        {/* Chart Container - 70% width */}
+        <div className="w-[70%]">
+          <ScrollableStockChart />
+        </div>
       </div>
     </div>
   );

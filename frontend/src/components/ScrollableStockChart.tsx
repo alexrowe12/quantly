@@ -324,8 +324,47 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
     return date.toLocaleDateString();
   };
 
+  // Calculate current price and percent change for ticker
+  const currentPrice = data.length > 0 ? data[data.length - 1].price : 0;
+  const previousPrice = data.length > 1 ? data[data.length - 2].price : currentPrice;
+  const percentChange = previousPrice !== 0 ? ((currentPrice - previousPrice) / previousPrice) * 100 : 0;
+  const isPositive = percentChange >= 0;
+
   return (
-    <div ref={containerRef} className={`w-full h-full ${className}`} style={{ backgroundColor: '#1F1F1F', outline: 'none' }}>
+    <div ref={containerRef} className={`w-full h-full ${className}`} style={{ backgroundColor: '#1F1F1F', outline: 'none', position: 'relative' }}>
+      {/* Stock Ticker Display */}
+      <div 
+        className="absolute top-4 left-6 z-10"
+        style={{
+          backgroundColor: '#2A2A2A',
+          padding: '8px 12px',
+          borderRadius: '6px',
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)'
+        }}
+      >
+        <div className="flex items-center gap-2">
+          <span 
+            className="text-lg font-semibold"
+            style={{ color: '#F9FAFB' }}
+          >
+            SPY
+          </span>
+          <span className="text-gray-400">|</span>
+          <span 
+            className="text-lg font-semibold"
+            style={{ color: '#F9FAFB' }}
+          >
+            {currentPrice.toFixed(2)}
+          </span>
+          <span 
+            className="text-sm font-medium"
+            style={{ color: isPositive ? '#10b981' : '#ef4444' }}
+          >
+            ({isPositive ? '+' : ''}{percentChange.toFixed(2)}%)
+          </span>
+        </div>
+      </div>
+      
       <ResponsiveContainer width="100%" height="100%">
         <LineChart
           data={visibleData}
@@ -350,8 +389,8 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
             labelFormatter={formatTooltipLabel}
             formatter={(value: number) => [`$${value.toFixed(2)}`, 'Price']}
             contentStyle={{
-              backgroundColor: '#1f2937',
-              border: '1px solid #374151',
+              backgroundColor: '#2A2A2A',
+              border: '1px solid #2A2A2A',
               borderRadius: '6px',
               color: '#F9FAFB'
             }}
