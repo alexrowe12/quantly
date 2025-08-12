@@ -11,6 +11,8 @@ interface StrategyItem {
 
 const StrategyPanel: React.FC = () => {
   const [openItems, setOpenItems] = useState<string[]>([]);
+  const [strategyName, setStrategyName] = useState('Strategy Name');
+  const [isEditingName, setIsEditingName] = useState(false);
 
   const strategyItems: StrategyItem[] = [
     { id: 'moving-average', name: 'Moving Average', number: 1, color: '#10b981' },
@@ -26,20 +28,65 @@ const StrategyPanel: React.FC = () => {
     );
   };
 
-  return (
-    <div className="w-full h-full p-4" style={{ backgroundColor: '#2A2A2A' }}>
-      {/* Header */}
-      <div className="mb-6">
-        <h2 
-          className="text-xl font-semibold text-center"
-          style={{ color: '#7dd3fc' }}
-        >
-          Strategy Name
-        </h2>
-      </div>
+  const handleNameDoubleClick = () => {
+    setIsEditingName(true);
+  };
 
-      {/* Accordion Items */}
-      <div>
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setStrategyName(e.target.value);
+  };
+
+  const handleNameSubmit = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      setIsEditingName(false);
+    }
+  };
+
+  const handleNameBlur = () => {
+    setIsEditingName(false);
+  };
+
+  return (
+    <div className="w-full h-full p-4" style={{ backgroundColor: '#1F1F1F' }}>
+      <div 
+        className="w-full h-full rounded-lg"
+        style={{ 
+          backgroundColor: '#2A2A2A',
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)'
+        }}
+      >
+        {/* Header */}
+        <div className="mb-6 pt-4 px-4">
+          {isEditingName ? (
+            <input
+              type="text"
+              value={strategyName}
+              onChange={handleNameChange}
+              onKeyDown={handleNameSubmit}
+              onBlur={handleNameBlur}
+              autoFocus
+              className="w-full text-xl font-semibold text-center bg-transparent border-b-2 border-gray-400 focus:border-white outline-none transition-colors duration-200"
+              style={{ color: '#F9FAFB' }}
+            />
+          ) : (
+            <div
+              onDoubleClick={handleNameDoubleClick}
+              className="text-xl font-semibold text-center cursor-pointer px-2 py-1 rounded transition-all duration-200 border-b-2 border-transparent hover:border-gray-500/50"
+              style={{ 
+                color: '#F9FAFB',
+                backgroundColor: 'transparent'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#3E3E3E'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+              title="Double-click to edit"
+            >
+              {strategyName}
+            </div>
+          )}
+        </div>
+
+        {/* Accordion Items */}
+        <div>
         {strategyItems.map((item) => {
           const isOpen = openItems.includes(item.id);
           
@@ -48,8 +95,8 @@ const StrategyPanel: React.FC = () => {
               {/* Accordion Header */}
               <button
                 onClick={() => toggleItem(item.id)}
-                className="w-full flex items-center justify-between p-4 text-left transition-colors duration-200 hover:bg-gray-600/50"
-                style={{ backgroundColor: '#2A2A2A' }}
+                className="w-full flex items-center justify-between p-4 text-left transition-all duration-300 ease-in-out hover:bg-gray-600/50"
+                style={{ backgroundColor: isOpen ? '#3E3E3E' : '#2A2A2A' }}
               >
                 <div className="flex items-center gap-3">
                   {/* Grid Icon */}
@@ -79,13 +126,18 @@ const StrategyPanel: React.FC = () => {
 
                   {/* Arrow */}
                   <div 
-                    className="transition-transform duration-300 ease-in-out"
+                    className="relative w-8 h-8 flex items-center justify-center rounded-full transition-all duration-300 ease-in-out hover:bg-black/20 group"
                     style={{ 
-                      transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                      color: '#9ca3af'
+                      transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)'
                     }}
                   >
-                    <svg width="12" height="8" viewBox="0 0 12 8" fill="currentColor">
+                    <svg 
+                      width="12" 
+                      height="8" 
+                      viewBox="0 0 12 8" 
+                      fill="currentColor"
+                      className="transition-colors duration-300 ease-in-out text-gray-400 group-hover:text-gray-300"
+                    >
                       <path d="M6 8L0 2L1.41 0.59L6 5.17L10.59 0.59L12 2L6 8Z"/>
                     </svg>
                   </div>
@@ -97,7 +149,7 @@ const StrategyPanel: React.FC = () => {
                 className="overflow-hidden transition-all duration-300 ease-in-out"
                 style={{ 
                   maxHeight: isOpen ? '200px' : '0px',
-                  backgroundColor: isOpen ? '#1F1F1F' : 'transparent'
+                  backgroundColor: isOpen ? '#3E3E3E' : 'transparent'
                 }}
               >
                 <div className="p-4">
@@ -105,7 +157,8 @@ const StrategyPanel: React.FC = () => {
                   <div className="space-y-3">
                     <div className="flex items-center gap-2">
                       <select 
-                        className="bg-gray-600 text-white px-3 py-1 rounded border border-gray-500 text-sm"
+                        className="text-white px-3 py-1 rounded border border-gray-500 text-sm"
+                        style={{ backgroundColor: '#2A2A2A' }}
                         defaultValue="Buy"
                       >
                         <option>Buy</option>
@@ -113,7 +166,8 @@ const StrategyPanel: React.FC = () => {
                       </select>
                       
                       <select 
-                        className="bg-gray-600 text-white px-3 py-1 rounded border border-gray-500 text-sm"
+                        className="text-white px-3 py-1 rounded border border-gray-500 text-sm"
+                        style={{ backgroundColor: '#2A2A2A' }}
                         defaultValue="<"
                       >
                         <option>&lt;</option>
@@ -124,7 +178,8 @@ const StrategyPanel: React.FC = () => {
                       <input 
                         type="number" 
                         defaultValue="30"
-                        className="bg-gray-600 text-white px-3 py-1 rounded border border-gray-500 text-sm w-16"
+                        className="text-white px-3 py-1 rounded border border-gray-500 text-sm w-16"
+                        style={{ backgroundColor: '#2A2A2A' }}
                       />
                     </div>
 
@@ -136,7 +191,8 @@ const StrategyPanel: React.FC = () => {
                         <input 
                           type="number" 
                           defaultValue="1"
-                          className="bg-gray-600 text-white px-3 py-1 rounded border border-gray-500 text-sm w-12"
+                          className="text-white px-3 py-1 rounded border border-gray-500 text-sm w-12"
+                          style={{ backgroundColor: '#2A2A2A' }}
                         />
                       </div>
                     </div>
@@ -146,7 +202,8 @@ const StrategyPanel: React.FC = () => {
                       <input 
                         type="number" 
                         defaultValue="14"
-                        className="bg-gray-600 text-white px-3 py-1 rounded border border-gray-500 text-sm w-16"
+                        className="text-white px-3 py-1 rounded border border-gray-500 text-sm w-16"
+                        style={{ backgroundColor: '#2A2A2A' }}
                       />
                     </div>
                   </div>
@@ -155,6 +212,7 @@ const StrategyPanel: React.FC = () => {
             </div>
           );
         })}
+        </div>
       </div>
     </div>
   );

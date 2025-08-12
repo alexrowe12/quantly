@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
   Tooltip
 } from 'recharts';
+import Statistics from './Statistics';
 
 interface StockData {
   timestamp: string;
@@ -364,6 +365,9 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
           </span>
         </div>
       </div>
+
+      {/* Statistics Panel */}
+      <Statistics className="absolute top-4 right-20" />
       
       <ResponsiveContainer width="100%" height="100%">
         <LineChart
