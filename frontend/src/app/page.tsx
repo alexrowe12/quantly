@@ -1,4 +1,4 @@
-import ScrollableStockChart from "@/components/ScrollableStockChart";
+import SynchronizedCharts from "@/components/SynchronizedCharts";
 import StrategyPanel from "@/components/StrategyPanel";
 
 export default function Home() {
@@ -51,7 +51,7 @@ export default function Home() {
         
         {/* Chart Container - 70% width */}
         <div className="w-[70%]">
-          <ScrollableStockChart />
+          <SynchronizedCharts />
         </div>
       </div>
     </div>

@@ -57,15 +57,25 @@ const generateStockData = (): StockData[] => {
 
 interface ScrollableStockChartProps {
   data?: StockData[];
+  startIndex?: number;
+  endIndex?: number;
+  onScrollChange?: (newStartIndex: number, newEndIndex: number) => void;
   className?: string;
 }
 
 const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({ 
-  data = generateStockData(), 
+  data = generateStockData(),
+  startIndex: externalStartIndex,
+  endIndex: externalEndIndex,
+  onScrollChange,
   className = "" 
 }) => {
-  const [startIndex, setStartIndex] = useState(0);
-  const [endIndex, setEndIndex] = useState(30);
+  // Use external state if provided, otherwise use internal state
+  const [internalStartIndex, setInternalStartIndex] = useState(0);
+  const [internalEndIndex, setInternalEndIndex] = useState(30);
+  
+  const startIndex = externalStartIndex !== undefined ? externalStartIndex : internalStartIndex;
+  const endIndex = externalEndIndex !== undefined ? externalEndIndex : internalEndIndex;
   const [isScrollingYAxis, setIsScrollingYAxis] = useState(false);
   const [isScrollingXAxis, setIsScrollingXAxis] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -120,8 +130,13 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
       const newStartIndex = Math.max(0, Math.min(data.length - 30, startIndex + scrollAmount));
       const newEndIndex = Math.min(data.length - 1, newStartIndex + 30);
       
-      setStartIndex(newStartIndex);
-      setEndIndex(newEndIndex);
+      // Use external callback if provided, otherwise use internal state
+      if (onScrollChange) {
+        onScrollChange(newStartIndex, newEndIndex);
+      } else {
+        setInternalStartIndex(newStartIndex);
+        setInternalEndIndex(newEndIndex);
+      }
     };
 
     const handleYAxisZoom = (e: WheelEvent) => {
