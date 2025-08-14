@@ -109,9 +109,6 @@ const SynchronizedCharts: React.FC = () => {
         />
       </div>
       
-      {/* Subtle separator */}
-      <div className="h-px" style={{ backgroundColor: '#333333' }} />
-      
       {/* Technical Indicator Chart - 30% of chart area */}
       <div className="h-[30%]">
         <TechnicalIndicatorChart 

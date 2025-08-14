@@ -86,7 +86,7 @@ const TechnicalIndicatorChart: React.FC<TechnicalIndicatorChartProps> = ({
     >
       {/* Technical Indicator Label */}
       <div 
-        className="absolute top-2 left-6 z-10"
+        className="absolute top-2 left-6 z-10 transition-opacity duration-300 ease-in-out hover:opacity-30"
         style={{
           backgroundColor: '#2A2A2A',
           padding: '4px 8px',
@@ -105,7 +105,7 @@ const TechnicalIndicatorChart: React.FC<TechnicalIndicatorChartProps> = ({
       <ResponsiveContainer width="100%" height="100%">
         <LineChart
           data={visibleData}
-          margin={{ top: 5, right: 0, left: 20, bottom: 5 }}
+          margin={{ top: 0, right: 0, left: 20, bottom: 5 }}
         >
           <XAxis 
             dataKey="timestamp"

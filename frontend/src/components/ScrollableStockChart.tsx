@@ -350,7 +350,7 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
     <div ref={containerRef} className={`w-full h-full ${className}`} style={{ backgroundColor: '#1F1F1F', outline: 'none', position: 'relative' }}>
       {/* Stock Ticker Display */}
       <div 
-        className="absolute top-4 left-6 z-10"
+        className="absolute top-4 left-6 z-10 transition-opacity duration-300 ease-in-out hover:opacity-30"
         style={{
           backgroundColor: '#2A2A2A',
           padding: '8px 12px',
@@ -387,7 +387,7 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
       <ResponsiveContainer width="100%" height="100%">
         <LineChart
           data={visibleData}
-          margin={{ top: 20, right: 0, left: 20, bottom: 40 }}
+          margin={{ top: 20, right: 0, left: 20, bottom: 10 }}
         >
           <XAxis 
             dataKey="timestamp"
