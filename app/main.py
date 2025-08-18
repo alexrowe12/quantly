@@ -77,6 +77,8 @@ def backtest(req: BacktestRequest):
         starting_value=req.starting_value,
         buy_strats=[s.dict() for s in req.buy_strategies],
         sell_strats=[s.dict() for s in req.sell_strategies],
+        start_date=req.start_date,
+        end_date=req.end_date,
     )
     return BacktestResponse(
         status="completed",

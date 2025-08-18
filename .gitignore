@@ -5,3 +5,6 @@ figma_assets/
 .vscode/
 strategy/__pycache__/
 .env
+app/__pycache__/
+data_proc/__pycache__/
+.claude/
