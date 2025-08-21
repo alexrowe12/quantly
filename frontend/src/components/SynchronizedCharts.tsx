@@ -1,101 +1,83 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ScrollableStockChart from './ScrollableStockChart';
 import TechnicalIndicatorChart from './TechnicalIndicatorChart';
+import { fetchChartData, StockData, RSIData } from '../services/api';
 
-interface StockData {
-  timestamp: string;
-  price: number;
+interface ErrorState {
+  message: string;
+  retry: () => void;
 }
 
-interface RSIData {
-  timestamp: string;
-  rsi: number;
-}
 
-const generateStockData = (): StockData[] => {
-  const data: StockData[] = [];
-  const startDate = new Date('2023-01-01');
-  const basePrice = 100;
-  
-  for (let i = 0; i < 365; i++) {
-    const date = new Date(startDate);
-    date.setDate(startDate.getDate() + i);
-    
-    // Create a consistent wave pattern using multiple sine waves
-    const dayOfYear = i;
-    
-    // Primary trend (slow wave over ~90 days)
-    const primaryWave = Math.sin(dayOfYear * 2 * Math.PI / 90) * 20;
-    
-    // Secondary oscillation (medium wave over ~30 days)
-    const secondaryWave = Math.sin(dayOfYear * 2 * Math.PI / 30) * 8;
-    
-    // Micro fluctuations (fast wave over ~7 days)
-    const microWave = Math.sin(dayOfYear * 2 * Math.PI / 7) * 3;
-    
-    // Small random component for realism (but deterministic based on day)
-    const pseudoRandom = Math.sin(dayOfYear * 1.618) * 2; // Using golden ratio for pseudo-randomness
-    
-    // Gradual upward trend over the year
-    const yearlyTrend = (dayOfYear / 365) * 15;
-    
-    const price = basePrice + primaryWave + secondaryWave + microWave + pseudoRandom + yearlyTrend;
-    
-    data.push({
-      timestamp: date.toISOString().split('T')[0],
-      price: parseFloat(Math.max(10, price).toFixed(2))
-    });
-  }
-  
-  return data;
-};
-
-const generateRSIData = (): RSIData[] => {
-  const data: RSIData[] = [];
-  const startDate = new Date('2023-01-01');
-  
-  for (let i = 0; i < 365; i++) {
-    const date = new Date(startDate);
-    date.setDate(startDate.getDate() + i);
-    
-    // Create oscillating RSI values between 1-100
-    const dayOfYear = i;
-    
-    // Base oscillation using sine waves for realistic RSI movement
-    const primaryWave = Math.sin(dayOfYear * 2 * Math.PI / 60) * 25; // ~60 day cycle
-    const secondaryWave = Math.sin(dayOfYear * 2 * Math.PI / 14) * 15; // ~14 day cycle  
-    const microWave = Math.sin(dayOfYear * 2 * Math.PI / 7) * 8; // ~7 day cycle
-    
-    // Add some pseudo-random variation
-    const pseudoRandom = Math.sin(dayOfYear * 3.14159) * 10;
-    
-    // Center around 50 (neutral RSI)
-    const baseRSI = 50 + primaryWave + secondaryWave + microWave + pseudoRandom;
-    
-    // Clamp between 1 and 100
-    const rsi = Math.max(1, Math.min(100, baseRSI));
-    
-    data.push({
-      timestamp: date.toISOString().split('T')[0],
-      rsi: parseFloat(rsi.toFixed(2))
-    });
-  }
-  
-  return data;
-};
 
 const SynchronizedCharts: React.FC = () => {
-  const [stockData] = useState(generateStockData());
-  const [rsiData] = useState(generateRSIData());
+  const [stockData, setStockData] = useState<StockData[]>([]);
+  const [rsiData, setRsiData] = useState<RSIData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<ErrorState | null>(null);
   const [startIndex, setStartIndex] = useState(0);
   const [endIndex, setEndIndex] = useState(30);
+
+  const loadChartData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const { stockData: apiStockData, rsiData: apiRsiData } = await fetchChartData('SPY');
+      setStockData(apiStockData);
+      setRsiData(apiRsiData);
+      
+      // Set initial view to show the last 365 days (1 year)
+      const totalDays = apiStockData.length;
+      const viewDays = Math.min(365, totalDays);
+      setStartIndex(Math.max(0, totalDays - viewDays));
+      setEndIndex(totalDays - 1);
+    } catch (err) {
+      setError({
+        message: err instanceof Error ? err.message : 'Failed to load chart data',
+        retry: loadChartData
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadChartData();
+  }, []);
 
   const handleScrollChange = (newStartIndex: number, newEndIndex: number) => {
     setStartIndex(newStartIndex);
     setEndIndex(newEndIndex);
   };
+
+  if (loading) {
+    return (
+      <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: '#1F1F1F' }}>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-4"></div>
+          <p style={{ color: '#F9FAFB' }}>Loading chart data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: '#1F1F1F' }}>
+        <div className="text-center">
+          <p style={{ color: '#ef4444' }} className="mb-4">Error: {error.message}</p>
+          <button 
+            onClick={error.retry}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full h-full flex flex-col">

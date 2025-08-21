@@ -1,3 +1,4 @@
+#!/bin/bash
 # Spin up frontend
 
 cd /Users/alexrowe/Desktop/Quantly/frontend

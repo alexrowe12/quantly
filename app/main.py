@@ -5,11 +5,13 @@ import uuid
 from datetime import datetime
 from typing import List
 
-from fastapi import FastAPI, HTTPException, Header, Depends, Query
+from fastapi import FastAPI, HTTPException, Header, Depends, Query, Request
+from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+import pandas as pd
 
 from pydantic import BaseModel
 
@@ -38,7 +40,11 @@ app.add_middleware(
 
 # — Dependencies —
 
-def verify_api_key(x_api_key: str = Header(...)):
+def verify_api_key(request: Request, x_api_key: str = Header(None)):
+    # Skip API key verification for OPTIONS requests (CORS preflight)
+    if request.method == "OPTIONS":
+        return
+    
     if x_api_key != API_KEY:
         raise HTTPException(status_code=401, detail="Invalid API key")
 
@@ -120,3 +126,110 @@ def get_prices(
         raise HTTPException(status_code=404, detail="No data found for that range")
 
     return rows
+
+# ─────────────────────────────
+# CHART DATA ENDPOINT
+# ─────────────────────────────
+
+class ChartDataPoint(BaseModel):
+    date: str  # YYYY-MM-DD format
+    price: float
+
+class RSIDataPoint(BaseModel):
+    date: str  # YYYY-MM-DD format
+    rsi: float
+
+class ChartDataResponse(BaseModel):
+    price_data: List[ChartDataPoint]
+    rsi_data: List[RSIDataPoint]
+    metadata: dict
+
+@app.api_route(
+    "/api/chart-data",
+    methods=["GET", "OPTIONS"],
+    dependencies=[Depends(verify_api_key)],
+)
+def get_chart_data(
+    request: Request,
+    ticker: str = Query("SPY", description="Ticker symbol"),
+    db: Session = Depends(get_db),
+):
+    # Handle OPTIONS request for CORS preflight
+    if request.method == "OPTIONS":
+        return Response(status_code=200)
+    # Get daily closing prices (last timestamp of each trading day)
+    sql = """
+        WITH daily_closes AS (
+            SELECT 
+                DATE(timestamp) as trading_date,
+                ticker,
+                close,
+                ROW_NUMBER() OVER (PARTITION BY DATE(timestamp) ORDER BY timestamp DESC) as rn
+            FROM price_data 
+            WHERE ticker = :ticker
+        )
+        SELECT 
+            trading_date,
+            close as price
+        FROM daily_closes 
+        WHERE rn = 1
+        ORDER BY trading_date ASC
+    """
+    
+    rows = db.execute(
+        text(sql),
+        {"ticker": ticker}
+    ).mappings().all()
+    
+    if not rows:
+        raise HTTPException(status_code=404, detail=f"No data found for ticker {ticker}")
+    
+    # Convert to DataFrame for technical indicator calculations
+    df = pd.DataFrame([dict(row) for row in rows])
+    df['trading_date'] = pd.to_datetime(df['trading_date'])
+    df = df.sort_values('trading_date').reset_index(drop=True)
+    
+    # Calculate RSI (14-period)
+    delta = df['price'].diff()
+    gain = delta.where(delta > 0, 0.0)
+    loss = -delta.where(delta < 0, 0.0)
+    
+    period = 14
+    avg_gain = gain.ewm(alpha=1/period, min_periods=period, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1/period, min_periods=period, adjust=False).mean()
+    
+    rs = avg_gain / avg_loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    
+    # Format data for frontend
+    price_data = [
+        ChartDataPoint(
+            date=row['trading_date'].strftime("%Y-%m-%d"),
+            price=float(row['price'])
+        )
+        for _, row in df.iterrows()
+    ]
+    
+    # RSI data (skip NaN values from the first 14 days)
+    rsi_data = [
+        RSIDataPoint(
+            date=row['trading_date'].strftime("%Y-%m-%d"),
+            rsi=float(row['rsi'])
+        )
+        for _, row in df.iterrows()
+        if pd.notna(row['rsi'])
+    ]
+    
+    metadata = {
+        "ticker": ticker,
+        "start_date": price_data[0].date if price_data else None,
+        "end_date": price_data[-1].date if price_data else None,
+        "total_days": len(price_data),
+        "rsi_days": len(rsi_data)
+    }
+    
+    return ChartDataResponse(
+        price_data=price_data,
+        rsi_data=rsi_data,
+        metadata=metadata
+    )
