@@ -60,6 +60,7 @@ interface ScrollableStockChartProps {
   startIndex?: number;
   endIndex?: number;
   onScrollChange?: (newStartIndex: number, newEndIndex: number) => void;
+  selectedRange?: number;
   className?: string;
 }
 
@@ -68,11 +69,12 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
   startIndex: externalStartIndex,
   endIndex: externalEndIndex,
   onScrollChange,
+  selectedRange = 30,
   className = "" 
 }) => {
   // Use external state if provided, otherwise use internal state
   const [internalStartIndex, setInternalStartIndex] = useState(0);
-  const [internalEndIndex, setInternalEndIndex] = useState(30);
+  const [internalEndIndex, setInternalEndIndex] = useState(selectedRange);
   
   const startIndex = externalStartIndex !== undefined ? externalStartIndex : internalStartIndex;
   const endIndex = externalEndIndex !== undefined ? externalEndIndex : internalEndIndex;
@@ -127,8 +129,8 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
       xAxisTimeoutRef.current = setTimeout(resetXAxisColor, 400);
       
       const scrollAmount = Math.sign(e.deltaY) * 1;
-      const newStartIndex = Math.max(0, Math.min(data.length - 30, startIndex + scrollAmount));
-      const newEndIndex = Math.min(data.length - 1, newStartIndex + 30);
+      const newStartIndex = Math.max(0, Math.min(data.length - selectedRange, startIndex + scrollAmount));
+      const newEndIndex = Math.min(data.length - 1, newStartIndex + selectedRange - 1);
       
       // Use external callback if provided, otherwise use internal state
       if (onScrollChange) {
@@ -187,7 +189,7 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
         clearTimeout(xAxisTimeoutRef.current);
       }
     };
-  }, [startIndex, data.length, priceRange]);
+  }, [startIndex, data.length, selectedRange, priceRange, onScrollChange, resetXAxisColor]);
 
   // Effect to reset X-axis color when data actually updates
   useEffect(() => {

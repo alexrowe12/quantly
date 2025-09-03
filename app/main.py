@@ -32,9 +32,9 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[os.getenv("FRONTEND_ORIGIN", "http://localhost:3000")],
+    allow_origins=["http://localhost:3000"],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -144,19 +144,20 @@ class ChartDataResponse(BaseModel):
     rsi_data: List[RSIDataPoint]
     metadata: dict
 
-@app.api_route(
+# Separate OPTIONS endpoint to avoid dependency issues
+@app.options("/api/chart-data")
+def chart_data_options():
+    return Response(status_code=200)
+
+@app.get(
     "/api/chart-data",
-    methods=["GET", "OPTIONS"],
+    response_model=ChartDataResponse,
     dependencies=[Depends(verify_api_key)],
 )
 def get_chart_data(
-    request: Request,
     ticker: str = Query("SPY", description="Ticker symbol"),
     db: Session = Depends(get_db),
 ):
-    # Handle OPTIONS request for CORS preflight
-    if request.method == "OPTIONS":
-        return Response(status_code=200)
     # Get daily closing prices (last timestamp of each trading day)
     sql = """
         WITH daily_closes AS (

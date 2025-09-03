@@ -20,6 +20,7 @@ interface TechnicalIndicatorChartProps {
   startIndex: number;
   endIndex: number;
   onScrollChange: (newStartIndex: number, newEndIndex: number) => void;
+  selectedRange?: number;
   className?: string;
 }
 
@@ -28,6 +29,7 @@ const TechnicalIndicatorChart: React.FC<TechnicalIndicatorChartProps> = ({
   startIndex,
   endIndex,
   onScrollChange,
+  selectedRange = 30,
   className = "" 
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -43,8 +45,8 @@ const TechnicalIndicatorChart: React.FC<TechnicalIndicatorChartProps> = ({
       lastScrollTimeRef.current = Date.now();
       
       const scrollAmount = Math.sign(e.deltaY) * 1;
-      const newStartIndex = Math.max(0, Math.min(data.length - 30, startIndex + scrollAmount));
-      const newEndIndex = Math.min(data.length - 1, newStartIndex + 30);
+      const newStartIndex = Math.max(0, Math.min(data.length - selectedRange, startIndex + scrollAmount));
+      const newEndIndex = Math.min(data.length - 1, newStartIndex + selectedRange - 1);
       
       // Only update if there's actually a change
       if (newStartIndex !== startIndex || newEndIndex !== endIndex) {
@@ -62,7 +64,7 @@ const TechnicalIndicatorChart: React.FC<TechnicalIndicatorChartProps> = ({
         container.removeEventListener('wheel', handleTimeScroll);
       }
     };
-  }, [startIndex, endIndex, data.length, onScrollChange]);
+  }, [startIndex, endIndex, data.length, selectedRange, onScrollChange]);
 
   const formatXAxisLabel = (tickItem: string) => {
     const date = new Date(tickItem);

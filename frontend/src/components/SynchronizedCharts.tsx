@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import ScrollableStockChart from './ScrollableStockChart';
 import TechnicalIndicatorChart from './TechnicalIndicatorChart';
+import TimeRangeSelector from './TimeRangeSelector';
 import { fetchChartData, StockData, RSIData } from '../services/api';
 
 interface ErrorState {
@@ -19,6 +20,7 @@ const SynchronizedCharts: React.FC = () => {
   const [error, setError] = useState<ErrorState | null>(null);
   const [startIndex, setStartIndex] = useState(0);
   const [endIndex, setEndIndex] = useState(30);
+  const [selectedRange, setSelectedRange] = useState(30);
 
   const loadChartData = async () => {
     try {
@@ -28,11 +30,11 @@ const SynchronizedCharts: React.FC = () => {
       setStockData(apiStockData);
       setRsiData(apiRsiData);
       
-      // Set initial view to show the last 365 days (1 year)
+      // Set initial view to show the last 30 days
       const totalDays = apiStockData.length;
-      const viewDays = Math.min(365, totalDays);
+      const viewDays = selectedRange;
       setStartIndex(Math.max(0, totalDays - viewDays));
-      setEndIndex(totalDays - 1);
+      setEndIndex(Math.min(totalDays - 1, (totalDays - viewDays) + viewDays - 1));
     } catch (err) {
       setError({
         message: err instanceof Error ? err.message : 'Failed to load chart data',
@@ -50,6 +52,19 @@ const SynchronizedCharts: React.FC = () => {
   const handleScrollChange = (newStartIndex: number, newEndIndex: number) => {
     setStartIndex(newStartIndex);
     setEndIndex(newEndIndex);
+  };
+
+  const handleRangeChange = (days: number) => {
+    setSelectedRange(days);
+    
+    // Adjust view to show the most recent data with the new range
+    const totalDays = stockData.length;
+    if (totalDays > 0) {
+      const newStartIndex = Math.max(0, totalDays - days);
+      const newEndIndex = Math.min(totalDays - 1, newStartIndex + days - 1);
+      setStartIndex(newStartIndex);
+      setEndIndex(newEndIndex);
+    }
   };
 
   if (loading) {
@@ -82,12 +97,21 @@ const SynchronizedCharts: React.FC = () => {
   return (
     <div className="w-full h-full flex flex-col">
       {/* Main Chart - 70% of chart area */}
-      <div className="h-[70%]">
+      <div className="h-[70%] relative">
         <ScrollableStockChart 
           data={stockData}
           startIndex={startIndex}
           endIndex={endIndex}
           onScrollChange={handleScrollChange}
+          selectedRange={selectedRange}
+        />
+        
+        {/* Time Range Selector positioned below SPY ticker */}
+        <TimeRangeSelector 
+          selectedRange={selectedRange}
+          onRangeChange={handleRangeChange}
+          className="absolute"
+          style={{ top: '72px', left: '24px' }}
         />
       </div>
       
@@ -98,6 +122,7 @@ const SynchronizedCharts: React.FC = () => {
           startIndex={startIndex}
           endIndex={endIndex}
           onScrollChange={handleScrollChange}
+          selectedRange={selectedRange}
         />
       </div>
     </div>
