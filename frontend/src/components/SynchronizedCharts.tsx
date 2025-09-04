@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import ScrollableStockChart from './ScrollableStockChart';
 import TechnicalIndicatorChart from './TechnicalIndicatorChart';
-import TimeRangeSelector from './TimeRangeSelector';
 import { fetchChartData, StockData, RSIData } from '../services/api';
 
 interface ErrorState {
@@ -104,14 +103,7 @@ const SynchronizedCharts: React.FC = () => {
           endIndex={endIndex}
           onScrollChange={handleScrollChange}
           selectedRange={selectedRange}
-        />
-        
-        {/* Time Range Selector positioned below SPY ticker */}
-        <TimeRangeSelector 
-          selectedRange={selectedRange}
           onRangeChange={handleRangeChange}
-          className="absolute"
-          style={{ top: '72px', left: '24px' }}
         />
       </div>
       

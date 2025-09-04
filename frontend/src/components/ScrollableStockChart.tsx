@@ -11,6 +11,7 @@ import {
   Tooltip
 } from 'recharts';
 import Statistics from './Statistics';
+import TimeRangeSelector from './TimeRangeSelector';
 
 interface StockData {
   timestamp: string;
@@ -62,6 +63,7 @@ interface ScrollableStockChartProps {
   onScrollChange?: (newStartIndex: number, newEndIndex: number) => void;
   selectedRange?: number;
   className?: string;
+  onRangeChange?: (days: number) => void;
 }
 
 const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({ 
@@ -70,7 +72,8 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
   endIndex: externalEndIndex,
   onScrollChange,
   selectedRange = 30,
-  className = "" 
+  className = "",
+  onRangeChange
 }) => {
   // Use external state if provided, otherwise use internal state
   const [internalStartIndex, setInternalStartIndex] = useState(0);
@@ -342,6 +345,34 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
     return date.toLocaleDateString();
   };
 
+  // Calculate tick interval based on selected range
+  const getTickInterval = (range: number, dataLength: number): number => {
+    let targetLabels: number;
+    
+    switch (range) {
+      case 5:
+        targetLabels = 5;
+        break;
+      case 30:
+        targetLabels = 30;
+        break;
+      case 100:
+        targetLabels = 20;
+        break;
+      case 365:
+        targetLabels = 36;
+        break;
+      default:
+        targetLabels = Math.min(range, 20);
+    }
+    
+    // Calculate interval to get approximately the target number of labels
+    const interval = Math.max(0, Math.floor(dataLength / targetLabels) - 1);
+    return interval;
+  };
+
+  const tickInterval = getTickInterval(selectedRange, visibleData.length);
+
   // Calculate current price and percent change for ticker
   const currentPrice = data.length > 0 ? data[data.length - 1].price : 0;
   const previousPrice = data.length > 1 ? data[data.length - 2].price : currentPrice;
@@ -350,16 +381,20 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
 
   return (
     <div ref={containerRef} className={`w-full h-full ${className}`} style={{ backgroundColor: '#1F1F1F', outline: 'none', position: 'relative' }}>
-      {/* Stock Ticker Display */}
+      {/* Stock Ticker Display with Time Range Selector */}
       <div 
-        className="absolute top-4 left-6 z-10 transition-opacity duration-300 ease-in-out hover:opacity-30"
+        className="absolute top-4 left-6 z-10"
         style={{
           backgroundColor: '#2A2A2A',
           padding: '8px 12px',
           borderRadius: '6px',
-          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)'
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px'
         }}
       >
+        {/* Price Info */}
         <div className="flex items-center gap-2">
           <span 
             className="text-lg font-semibold"
@@ -381,6 +416,15 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
             ({isPositive ? '+' : ''}{percentChange.toFixed(2)}%)
           </span>
         </div>
+        
+        {/* Time Range Selector */}
+        {onRangeChange && (
+          <TimeRangeSelector 
+            selectedRange={selectedRange}
+            onRangeChange={onRangeChange}
+            className=""
+          />
+        )}
       </div>
 
       {/* Statistics Panel */}
@@ -398,7 +442,7 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
             textAnchor="end"
             height={40}
             tick={{ fontSize: 12, fill: isScrollingXAxis ? '#F9FAFB' : '#6b7280' }}
-            interval={1}
+            interval={tickInterval}
           />
           <YAxis 
             orientation="right"

@@ -22,7 +22,7 @@ const TimeRangeSelector: React.FC<TimeRangeSelectorProps> = ({
 
   return (
     <div 
-      className={`${className} z-10 transition-opacity duration-300 ease-in-out hover:opacity-30`}
+      className={`${className} z-10`}
       style={{
         backgroundColor: '#2A2A2A',
         padding: '8px 12px',
@@ -50,12 +50,13 @@ const TimeRangeSelector: React.FC<TimeRangeSelectorProps> = ({
             key={range.days}
             onClick={() => onRangeChange(range.days)}
             className={`px-3 py-1 text-sm font-medium rounded transition-all duration-200 ${
-              isSelected ? 'text-white' : 'text-gray-400 hover:text-gray-200'
+              isSelected ? '' : 'text-gray-400 hover:text-gray-200'
             }`}
             style={{
-              backgroundColor: isSelected ? '#3b82f6' : 'transparent',
-              border: isSelected ? '1px solid #3b82f6' : '1px solid #4b5563',
-              borderColor: isSelected ? '#3b82f6' : '#4b5563'
+              backgroundColor: isSelected ? '#F9FAFB' : 'transparent',
+              border: isSelected ? '1px solid #F9FAFB' : '1px solid #4b5563',
+              borderColor: isSelected ? '#F9FAFB' : '#4b5563',
+              color: isSelected ? '#1F1F1F' : undefined
             }}
             onMouseEnter={(e) => {
               if (!isSelected) {
