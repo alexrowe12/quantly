@@ -1,7 +1,27 @@
+'use client';
+
+import { useState } from 'react';
 import SynchronizedCharts from "@/components/SynchronizedCharts";
 import StrategyPanel from "@/components/StrategyPanel";
 
+interface BacktestResult {
+  starting_value: number;
+  final_value: number;
+  trades: Array<{
+    action: string;
+    price: number;
+    timestamp: string;
+  }>;
+}
+
+interface BacktestResponse {
+  status: string;
+  b_id: string;
+  result: BacktestResult;
+}
+
 export default function Home() {
+  const [backtestResult, setBacktestResult] = useState<BacktestResponse | null>(null);
   return (
     <div className="w-screen h-screen flex flex-col" style={{ backgroundColor: '#1F1F1F' }}>
       {/* Top Menu Bar */}
@@ -46,12 +66,12 @@ export default function Home() {
       <div className="flex-1 flex">
         {/* Left Panel - 30% width */}
         <div className="w-[30%]" style={{ backgroundColor: '#1F1F1F' }}>
-          <StrategyPanel />
+          <StrategyPanel onBacktestComplete={setBacktestResult} />
         </div>
         
         {/* Chart Container - 70% width */}
         <div className="w-[70%]">
-          <SynchronizedCharts />
+          <SynchronizedCharts backtestResult={backtestResult} />
         </div>
       </div>
     </div>

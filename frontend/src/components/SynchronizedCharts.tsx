@@ -5,14 +5,32 @@ import ScrollableStockChart from './ScrollableStockChart';
 import TechnicalIndicatorChart from './TechnicalIndicatorChart';
 import { fetchChartData, StockData, RSIData } from '../services/api';
 
+interface BacktestResult {
+  starting_value: number;
+  final_value: number;
+  trades: Array<{
+    action: string;
+    price: number;
+    timestamp: string;
+  }>;
+}
+
+interface BacktestResponse {
+  status: string;
+  b_id: string;
+  result: BacktestResult;
+}
+
 interface ErrorState {
   message: string;
   retry: () => void;
 }
 
+interface SynchronizedChartsProps {
+  backtestResult?: BacktestResponse | null;
+}
 
-
-const SynchronizedCharts: React.FC = () => {
+const SynchronizedCharts: React.FC<SynchronizedChartsProps> = ({ backtestResult }) => {
   const [stockData, setStockData] = useState<StockData[]>([]);
   const [rsiData, setRsiData] = useState<RSIData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -104,6 +122,7 @@ const SynchronizedCharts: React.FC = () => {
           onScrollChange={handleScrollChange}
           selectedRange={selectedRange}
           onRangeChange={handleRangeChange}
+          backtestResult={backtestResult}
         />
       </div>
       

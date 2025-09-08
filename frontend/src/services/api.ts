@@ -42,6 +42,80 @@ class ApiError extends Error {
   }
 }
 
+// Backtest interfaces
+interface StrategyConfig {
+  name: string;
+  trade_percent: number;
+  threshold?: number;
+  period?: number;
+  fast_period?: number;
+  slow_period?: number;
+  signal_period?: number;
+}
+
+interface BacktestRequest {
+  ticker: string;
+  starting_value: number;
+  buy_strategies: StrategyConfig[];
+  sell_strategies: StrategyConfig[];
+  start_date?: string;
+  end_date?: string;
+}
+
+interface TradeRecord {
+  action: string;
+  price: number;
+  timestamp: string;
+}
+
+interface BacktestResult {
+  starting_value: number;
+  final_value: number;
+  trades: TradeRecord[];
+}
+
+interface BacktestResponse {
+  status: string;
+  b_id: string;
+  result: BacktestResult;
+}
+
+export async function runBacktest(backtestData: BacktestRequest): Promise<BacktestResponse> {
+  try {
+    console.log('Sending backtest request:', backtestData);
+    
+    const response = await fetch(
+      `${API_BASE_URL}/api/backtest`,
+      {
+        method: 'POST',
+        headers: {
+          'X-API-Key': API_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(backtestData),
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new ApiError(
+        errorData.detail || `Backtest request failed with status ${response.status}`,
+        response.status
+      );
+    }
+
+    const result: BacktestResponse = await response.json();
+    console.log('Backtest response:', result);
+    return result;
+  } catch (error) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
+    
+    throw new ApiError(`Failed to run backtest: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
 export async function fetchChartData(ticker: string = 'SPY'): Promise<{
   stockData: StockData[];
   rsiData: RSIData[];

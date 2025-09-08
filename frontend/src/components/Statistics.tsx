@@ -2,19 +2,100 @@
 
 import React, { useState } from 'react';
 
-interface StatisticsProps {
-  className?: string;
+interface BacktestResult {
+  starting_value: number;
+  final_value: number;
+  trades: Array<{
+    action: string;
+    price: number;
+    timestamp: string;
+  }>;
 }
 
-const Statistics: React.FC<StatisticsProps> = ({ className = "" }) => {
-  // Placeholder statistics data - will be dynamic eventually
-  const stats = {
-    totalReturn: 14.73,
-    sharpeRatio: 1.3,
-    maxDrawdown: -702.38,
-    beta: 0.52,
-    winRate: 54.40
+interface BacktestResponse {
+  status: string;
+  b_id: string;
+  result: BacktestResult;
+}
+
+interface StatisticsProps {
+  className?: string;
+  backtestResult?: BacktestResponse | null;
+}
+
+const Statistics: React.FC<StatisticsProps> = ({ className = "", backtestResult }) => {
+  
+  // Calculate comprehensive statistics from backtest result
+  const calculateStatistics = (result: BacktestResult) => {
+    const totalReturn = ((result.final_value - result.starting_value) / result.starting_value) * 100;
+    
+    // Group trades into buy-sell pairs
+    const buyTrades = result.trades.filter(trade => trade.action === 'buy');
+    const sellTrades = result.trades.filter(trade => trade.action === 'sell');
+    const tradePairs = Math.min(buyTrades.length, sellTrades.length);
+    
+    // Calculate win rate and returns for each trade
+    let wins = 0;
+    const returns: number[] = [];
+    let runningBalance = result.starting_value;
+    let peak = result.starting_value;
+    let maxDrawdown = 0;
+    
+    for (let i = 0; i < tradePairs; i++) {
+      const buyPrice = buyTrades[i].price;
+      const sellPrice = sellTrades[i].price;
+      const tradeReturn = (sellPrice - buyPrice) / buyPrice;
+      returns.push(tradeReturn);
+      
+      if (tradeReturn > 0) {
+        wins++;
+      }
+      
+      // Calculate running balance and drawdown
+      const tradeAmount = runningBalance * 0.25; // Assuming 25% allocation per trade
+      const tradeProfit = tradeAmount * tradeReturn;
+      runningBalance += tradeProfit;
+      
+      if (runningBalance > peak) {
+        peak = runningBalance;
+      } else {
+        const drawdown = (peak - runningBalance) / peak * 100;
+        if (drawdown > maxDrawdown) {
+          maxDrawdown = drawdown;
+        }
+      }
+    }
+    
+    const winRate = tradePairs > 0 ? (wins / tradePairs) * 100 : 0;
+    
+    // Calculate Sharpe Ratio (simplified - assuming risk-free rate of 2%)
+    const meanReturn = returns.reduce((sum, r) => sum + r, 0) / returns.length;
+    const returnVariance = returns.reduce((sum, r) => sum + Math.pow(r - meanReturn, 2), 0) / returns.length;
+    const returnStdDev = Math.sqrt(returnVariance);
+    const sharpeRatio = returnStdDev > 0 ? (meanReturn - 0.02) / returnStdDev : 0;
+    
+    // Beta calculation (simplified - comparing to SPY, assume beta = 1 for now)
+    const beta = 1.0; // This would require SPY price data for proper calculation
+    
+    return {
+      totalReturn,
+      sharpeRatio,
+      maxDrawdown: -maxDrawdown, // Negative for display
+      beta,
+      winRate
+    };
   };
+
+  // Use calculated stats if backtest result exists, otherwise show dashes
+  const stats = backtestResult 
+    ? calculateStatistics(backtestResult.result)
+    : {
+        totalReturn: null,
+        sharpeRatio: null, 
+        maxDrawdown: null,
+        beta: null,
+        winRate: null
+      };
 
   return (
     <div 
@@ -69,7 +150,7 @@ const Statistics: React.FC<StatisticsProps> = ({ className = "" }) => {
             className="text-sm font-medium"
             style={{ color: '#F9FAFB' }}
           >
-            {stats.totalReturn.toFixed(2)}%
+            {stats.totalReturn !== null ? `${stats.totalReturn.toFixed(2)}%` : '-'}
           </span>
         </div>
 
@@ -84,7 +165,7 @@ const Statistics: React.FC<StatisticsProps> = ({ className = "" }) => {
             className="text-sm font-medium"
             style={{ color: '#F9FAFB' }}
           >
-            {stats.sharpeRatio.toFixed(1)}
+            {stats.sharpeRatio !== null ? stats.sharpeRatio.toFixed(1) : '-'}
           </span>
         </div>
 
@@ -99,7 +180,7 @@ const Statistics: React.FC<StatisticsProps> = ({ className = "" }) => {
             className="text-sm font-medium"
             style={{ color: '#F9FAFB' }}
           >
-            -${Math.abs(stats.maxDrawdown).toFixed(2)}
+            {stats.maxDrawdown !== null ? `-$${Math.abs(stats.maxDrawdown).toFixed(2)}` : '-'}
           </span>
         </div>
 
@@ -114,7 +195,7 @@ const Statistics: React.FC<StatisticsProps> = ({ className = "" }) => {
             className="text-sm font-medium"
             style={{ color: '#F9FAFB' }}
           >
-            {stats.beta.toFixed(2)}
+            {stats.beta !== null ? stats.beta.toFixed(2) : '-'}
           </span>
         </div>
 
@@ -129,7 +210,7 @@ const Statistics: React.FC<StatisticsProps> = ({ className = "" }) => {
             className="text-sm font-medium"
             style={{ color: '#F9FAFB' }}
           >
-            {stats.winRate.toFixed(2)}%
+            {stats.winRate !== null ? `${stats.winRate.toFixed(2)}%` : '-'}
           </span>
         </div>
       </div>

@@ -18,6 +18,22 @@ interface StockData {
   price: number;
 }
 
+interface BacktestResult {
+  starting_value: number;
+  final_value: number;
+  trades: Array<{
+    action: string;
+    price: number;
+    timestamp: string;
+  }>;
+}
+
+interface BacktestResponse {
+  status: string;
+  b_id: string;
+  result: BacktestResult;
+}
+
 const generateStockData = (): StockData[] => {
   const data: StockData[] = [];
   const startDate = new Date('2023-01-01');
@@ -64,6 +80,7 @@ interface ScrollableStockChartProps {
   selectedRange?: number;
   className?: string;
   onRangeChange?: (days: number) => void;
+  backtestResult?: BacktestResponse | null;
 }
 
 const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({ 
@@ -73,7 +90,8 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
   onScrollChange,
   selectedRange = 30,
   className = "",
-  onRangeChange
+  onRangeChange,
+  backtestResult
 }) => {
   // Use external state if provided, otherwise use internal state
   const [internalStartIndex, setInternalStartIndex] = useState(0);
@@ -428,7 +446,7 @@ const ScrollableStockChart: React.FC<ScrollableStockChartProps> = ({
       </div>
 
       {/* Statistics Panel */}
-      <Statistics className="absolute top-4 right-20" />
+      <Statistics className="absolute top-4 right-20" backtestResult={backtestResult} />
       
       <ResponsiveContainer width="100%" height="100%">
         <LineChart
