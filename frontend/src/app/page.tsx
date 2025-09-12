@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import SynchronizedCharts from "@/components/SynchronizedCharts";
 import StrategyPanel from "@/components/StrategyPanel";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 interface BacktestResult {
   starting_value: number;
@@ -66,12 +67,16 @@ export default function Home() {
       <div className="flex-1 flex">
         {/* Left Panel - 30% width */}
         <div className="w-[30%]" style={{ backgroundColor: '#1F1F1F' }}>
-          <StrategyPanel onBacktestComplete={setBacktestResult} />
+          <ErrorBoundary>
+            <StrategyPanel onBacktestComplete={setBacktestResult} />
+          </ErrorBoundary>
         </div>
         
         {/* Chart Container - 70% width */}
         <div className="w-[70%]">
-          <SynchronizedCharts backtestResult={backtestResult} />
+          <ErrorBoundary>
+            <SynchronizedCharts backtestResult={backtestResult} />
+          </ErrorBoundary>
         </div>
       </div>
     </div>

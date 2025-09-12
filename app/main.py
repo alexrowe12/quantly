@@ -2,18 +2,23 @@
 
 import os
 import uuid
+import traceback
 from datetime import datetime
-from typing import List
+from typing import List, Dict, Any
 
 from fastapi import FastAPI, HTTPException, Header, Depends, Query, Request
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exception_handlers import http_exception_handler
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 import pandas as pd
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from .models import BacktestRequest, BacktestResponse, BacktestResult
 from .backtest_engine import run_backtest
@@ -37,6 +42,51 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+
+# ─────────────────────────────
+# ERROR HANDLERS
+# ─────────────────────────────
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Handle Pydantic validation errors with detailed field-specific messages"""
+    errors = []
+    for error in exc.errors():
+        field = " -> ".join(str(x) for x in error["loc"])
+        message = error["msg"]
+        errors.append(f"{field}: {message}")
+    
+    return HTTPException(
+        status_code=422,
+        detail=f"Validation failed: {'; '.join(errors)}"
+    )
+
+@app.exception_handler(ValueError)
+async def value_error_handler(request: Request, exc: ValueError):
+    """Handle value errors in business logic"""
+    return HTTPException(
+        status_code=400,
+        detail=f"Invalid data: {str(exc)}"
+    )
+
+@app.exception_handler(SQLAlchemyError)
+async def database_error_handler(request: Request, exc: SQLAlchemyError):
+    """Handle database errors"""
+    print(f"Database error: {exc}")
+    return HTTPException(
+        status_code=500,
+        detail="Database error occurred. Please try again later."
+    )
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    """Handle unexpected errors"""
+    print(f"Unexpected error: {exc}")
+    print(f"Traceback: {traceback.format_exc()}")
+    return HTTPException(
+        status_code=500,
+        detail="An unexpected error occurred. Please try again later."
+    )
 
 # — Dependencies —
 
@@ -77,20 +127,94 @@ class PriceData(BaseModel):
     dependencies=[Depends(verify_api_key)],
 )
 def backtest(req: BacktestRequest):
-    b_id = f"backtest{datetime.utcnow().strftime('%y%m%d%H%M%S')}-{uuid.uuid4().hex[:6]}"
-    result = run_backtest(
-        ticker=req.ticker,
-        starting_value=req.starting_value,
-        buy_strats=[s.dict() for s in req.buy_strategies],
-        sell_strats=[s.dict() for s in req.sell_strategies],
-        start_date=req.start_date,
-        end_date=req.end_date,
-    )
-    return BacktestResponse(
-        status="completed",
-        b_id=b_id,
-        result=BacktestResult(**result),
-    )
+    """Run a backtest with comprehensive error handling and validation"""
+    try:
+        # Additional validation
+        if not req.ticker or not req.ticker.strip():
+            raise HTTPException(status_code=400, detail="Ticker symbol is required and cannot be empty")
+        
+        if req.starting_value <= 0:
+            raise HTTPException(status_code=400, detail="Starting value must be greater than 0")
+        
+        if len(req.buy_strategies) == 0 and len(req.sell_strategies) == 0:
+            raise HTTPException(status_code=400, detail="At least one buy or sell strategy must be provided")
+        
+        # Validate strategy configurations
+        all_strategies = req.buy_strategies + req.sell_strategies
+        for i, strategy in enumerate(all_strategies):
+            strategy_type = "buy" if i < len(req.buy_strategies) else "sell"
+            strategy_num = (i + 1) if i < len(req.buy_strategies) else (i - len(req.buy_strategies) + 1)
+            
+            if strategy.trade_percent <= 0 or strategy.trade_percent >= 1:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"{strategy_type.capitalize()} strategy {strategy_num}: Trade percent must be between 0 and 1 (exclusive)"
+                )
+            
+            # Strategy-specific validations
+            if "rsi" in strategy.name.lower():
+                if strategy.threshold is None or strategy.threshold < 0 or strategy.threshold > 100:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"{strategy_type.capitalize()} strategy {strategy_num}: RSI threshold must be between 0 and 100"
+                    )
+            
+            if "macd" in strategy.name.lower():
+                if not strategy.fast_period or strategy.fast_period < 1:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"{strategy_type.capitalize()} strategy {strategy_num}: MACD fast period must be at least 1"
+                    )
+                if not strategy.slow_period or strategy.slow_period < 1:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"{strategy_type.capitalize()} strategy {strategy_num}: MACD slow period must be at least 1"
+                    )
+                if not strategy.signal_period or strategy.signal_period < 1:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"{strategy_type.capitalize()} strategy {strategy_num}: MACD signal period must be at least 1"
+                    )
+        
+        # Generate backtest ID
+        b_id = f"backtest{datetime.utcnow().strftime('%y%m%d%H%M%S')}-{uuid.uuid4().hex[:6]}"
+        
+        # Run the backtest
+        result = run_backtest(
+            ticker=req.ticker,
+            starting_value=req.starting_value,
+            buy_strats=[s.dict() for s in req.buy_strategies],
+            sell_strats=[s.dict() for s in req.sell_strategies],
+            start_date=req.start_date,
+            end_date=req.end_date,
+        )
+        
+        # Validate backtest results
+        if not result:
+            raise HTTPException(status_code=500, detail="Backtest engine returned no results")
+        
+        if "error" in result:
+            raise HTTPException(status_code=400, detail=f"Backtest failed: {result['error']}")
+        
+        # Check if any trades were generated
+        if len(result.get("trades", [])) == 0:
+            print(f"Warning: No trades were generated for backtest {b_id}")
+        
+        return BacktestResponse(
+            status="completed",
+            b_id=b_id,
+            result=BacktestResult(**result),
+        )
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid input data: {str(e)}")
+    except Exception as e:
+        print(f"Unexpected error in backtest endpoint: {e}")
+        print(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail="An unexpected error occurred during backtesting. Please try again.")
 
 # ─────────────────────────────
 # PRICE RANGE ENDPOINT
@@ -158,79 +282,120 @@ def get_chart_data(
     ticker: str = Query("SPY", description="Ticker symbol"),
     db: Session = Depends(get_db),
 ):
-    # Get daily closing prices (last timestamp of each trading day)
-    sql = """
-        WITH daily_closes AS (
+    """Get chart data with comprehensive error handling"""
+    try:
+        # Validate ticker input
+        if not ticker or not ticker.strip():
+            raise HTTPException(status_code=400, detail="Ticker symbol is required and cannot be empty")
+        
+        ticker = ticker.strip().upper()  # Normalize ticker
+        
+        # Get daily closing prices (last timestamp of each trading day)
+        sql = """
+            WITH daily_closes AS (
+                SELECT 
+                    DATE(timestamp) as trading_date,
+                    ticker,
+                    close,
+                    ROW_NUMBER() OVER (PARTITION BY DATE(timestamp) ORDER BY timestamp DESC) as rn
+                FROM price_data 
+                WHERE ticker = :ticker
+            )
             SELECT 
-                DATE(timestamp) as trading_date,
-                ticker,
-                close,
-                ROW_NUMBER() OVER (PARTITION BY DATE(timestamp) ORDER BY timestamp DESC) as rn
-            FROM price_data 
-            WHERE ticker = :ticker
+                trading_date,
+                close as price
+            FROM daily_closes 
+            WHERE rn = 1
+            ORDER BY trading_date ASC
+        """
+        
+        rows = db.execute(
+            text(sql),
+            {"ticker": ticker}
+        ).mappings().all()
+        
+        if not rows:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"No price data found for ticker '{ticker}'. Please check the ticker symbol or contact support if this symbol should be available."
+            )
+        
+        if len(rows) < 15:  # Need at least 15 days for RSI calculation
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient data for ticker '{ticker}'. Found {len(rows)} days, but need at least 15 days for technical indicators."
+            )
+        
+        # Convert to DataFrame for technical indicator calculations
+        try:
+            df = pd.DataFrame([dict(row) for row in rows])
+            df['trading_date'] = pd.to_datetime(df['trading_date'])
+            df = df.sort_values('trading_date').reset_index(drop=True)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error processing price data: {str(e)}")
+        
+        # Calculate RSI (14-period) with error handling
+        try:
+            delta = df['price'].diff()
+            gain = delta.where(delta > 0, 0.0)
+            loss = -delta.where(delta < 0, 0.0)
+            
+            period = 14
+            avg_gain = gain.ewm(alpha=1/period, min_periods=period, adjust=False).mean()
+            avg_loss = loss.ewm(alpha=1/period, min_periods=period, adjust=False).mean()
+            
+            # Avoid division by zero
+            avg_loss = avg_loss.replace(0, 1e-10)
+            rs = avg_gain / avg_loss
+            df['rsi'] = 100 - (100 / (1 + rs))
+        except Exception as e:
+            print(f"Error calculating RSI for {ticker}: {e}")
+            # If RSI calculation fails, create dummy RSI data
+            df['rsi'] = float('nan')
+        
+        # Format data for frontend with error handling
+        try:
+            price_data = [
+                ChartDataPoint(
+                    date=row['trading_date'].strftime("%Y-%m-%d"),
+                    price=float(row['price'])
+                )
+                for _, row in df.iterrows()
+            ]
+            
+            # RSI data (skip NaN values from the first 14 days)
+            rsi_data = [
+                RSIDataPoint(
+                    date=row['trading_date'].strftime("%Y-%m-%d"),
+                    rsi=float(row['rsi'])
+                )
+                for _, row in df.iterrows()
+                if pd.notna(row['rsi'])
+            ]
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error formatting chart data: {str(e)}")
+        
+        metadata = {
+            "ticker": ticker,
+            "start_date": price_data[0].date if price_data else None,
+            "end_date": price_data[-1].date if price_data else None,
+            "total_days": len(price_data),
+            "rsi_days": len(rsi_data)
+        }
+        
+        return ChartDataResponse(
+            price_data=price_data,
+            rsi_data=rsi_data,
+            metadata=metadata
         )
-        SELECT 
-            trading_date,
-            close as price
-        FROM daily_closes 
-        WHERE rn = 1
-        ORDER BY trading_date ASC
-    """
-    
-    rows = db.execute(
-        text(sql),
-        {"ticker": ticker}
-    ).mappings().all()
-    
-    if not rows:
-        raise HTTPException(status_code=404, detail=f"No data found for ticker {ticker}")
-    
-    # Convert to DataFrame for technical indicator calculations
-    df = pd.DataFrame([dict(row) for row in rows])
-    df['trading_date'] = pd.to_datetime(df['trading_date'])
-    df = df.sort_values('trading_date').reset_index(drop=True)
-    
-    # Calculate RSI (14-period)
-    delta = df['price'].diff()
-    gain = delta.where(delta > 0, 0.0)
-    loss = -delta.where(delta < 0, 0.0)
-    
-    period = 14
-    avg_gain = gain.ewm(alpha=1/period, min_periods=period, adjust=False).mean()
-    avg_loss = loss.ewm(alpha=1/period, min_periods=period, adjust=False).mean()
-    
-    rs = avg_gain / avg_loss
-    df['rsi'] = 100 - (100 / (1 + rs))
-    
-    # Format data for frontend
-    price_data = [
-        ChartDataPoint(
-            date=row['trading_date'].strftime("%Y-%m-%d"),
-            price=float(row['price'])
-        )
-        for _, row in df.iterrows()
-    ]
-    
-    # RSI data (skip NaN values from the first 14 days)
-    rsi_data = [
-        RSIDataPoint(
-            date=row['trading_date'].strftime("%Y-%m-%d"),
-            rsi=float(row['rsi'])
-        )
-        for _, row in df.iterrows()
-        if pd.notna(row['rsi'])
-    ]
-    
-    metadata = {
-        "ticker": ticker,
-        "start_date": price_data[0].date if price_data else None,
-        "end_date": price_data[-1].date if price_data else None,
-        "total_days": len(price_data),
-        "rsi_days": len(rsi_data)
-    }
-    
-    return ChartDataResponse(
-        price_data=price_data,
-        rsi_data=rsi_data,
-        metadata=metadata
-    )
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    except SQLAlchemyError as e:
+        print(f"Database error in chart data endpoint: {e}")
+        raise HTTPException(status_code=500, detail="Database error occurred while fetching chart data")
+    except Exception as e:
+        print(f"Unexpected error in chart data endpoint: {e}")
+        print(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail="An unexpected error occurred while fetching chart data")
