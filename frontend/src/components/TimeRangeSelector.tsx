@@ -22,7 +22,7 @@ const TimeRangeSelector: React.FC<TimeRangeSelectorProps> = ({
 
   return (
     <div 
-      className={`${className} z-10`}
+      className={`time-range-selector ${className} z-10`}
       style={{
         backgroundColor: '#2A2A2A',
         padding: '8px 12px',

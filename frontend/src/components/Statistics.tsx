@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
 interface BacktestResult {
   starting_value: number;
@@ -24,6 +24,25 @@ interface StatisticsProps {
 }
 
 const Statistics: React.FC<StatisticsProps> = ({ className = "", backtestResult }) => {
+  const [showEditDropdown, setShowEditDropdown] = useState(false);
+  const editDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Handle clicking outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (editDropdownRef.current && !editDropdownRef.current.contains(event.target as Node)) {
+        setShowEditDropdown(false);
+      }
+    };
+
+    if (showEditDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showEditDropdown]);
   
   // Calculate comprehensive statistics from backtest result
   const calculateStatistics = (result: BacktestResult) => {
@@ -99,7 +118,7 @@ const Statistics: React.FC<StatisticsProps> = ({ className = "", backtestResult 
 
   return (
     <div 
-      className={`${className} z-10 transition-opacity duration-300 ease-in-out hover:opacity-30`}
+      className={`statistics-panel ${className} z-10 transition-opacity duration-300 ease-in-out hover:opacity-30`}
       style={{
         backgroundColor: '#2A2A2A',
         padding: '12px 16px',
@@ -117,23 +136,48 @@ const Statistics: React.FC<StatisticsProps> = ({ className = "", backtestResult 
           Statistics
         </h3>
         <div className="flex items-center gap-2">
-          {/* Edit Icon */}
-          <svg 
-            width="16" 
-            height="16" 
-            viewBox="0 0 16 16" 
-            fill="none"
-            className="cursor-pointer opacity-70 hover:opacity-100 transition-opacity duration-200"
-          >
-            <path 
-              d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Z"
-              fill="#9ca3af"
-            />
-            <path 
-              d="m5.21 10.79-1.41 1.42a.75.75 0 0 0 .03 1.06 1.75 1.75 0 0 0 1.06.03l1.42-1.41.03-.04.04-.03L5.21 10.79Z"
-              fill="#9ca3af"
-            />
-          </svg>
+          {/* Edit Icon with dropdown */}
+          <div className="relative" ref={editDropdownRef}>
+            <svg 
+              width="16" 
+              height="16" 
+              viewBox="0 0 16 16" 
+              fill="none"
+              className="cursor-pointer transition-all duration-300 hover:opacity-60"
+              style={{ opacity: 0.7 }}
+              onClick={() => setShowEditDropdown(!showEditDropdown)}
+            >
+              <path 
+                d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Z"
+                fill="#9ca3af"
+              />
+              <path 
+                d="m5.21 10.79-1.41 1.42a.75.75 0 0 0 .03 1.06 1.75 1.75 0 0 0 1.06.03l1.42-1.41.03-.04.04-.03L5.21 10.79Z"
+                fill="#9ca3af"
+              />
+            </svg>
+            
+            {/* Dropdown */}
+            {showEditDropdown && (
+              <div 
+                className="absolute right-0 top-8 mt-1 w-64 rounded-lg shadow-lg transition-all duration-200 ease-in-out transform origin-top-right z-50"
+                style={{ 
+                  backgroundColor: '#2A2A2A',
+                  border: '1px solid #444',
+                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)'
+                }}
+              >
+                <div className="p-4">
+                  <p 
+                    className="text-sm text-center"
+                    style={{ color: '#9ca3af' }}
+                  >
+                    Statistics customization coming soon
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

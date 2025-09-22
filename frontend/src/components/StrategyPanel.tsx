@@ -818,7 +818,7 @@ const StrategyPanel: React.FC<StrategyPanelProps> = ({ onBacktestComplete }) => 
             items={strategyItems.map(item => item.id)} 
             strategy={verticalListSortingStrategy}
           >
-            <div>
+            <div className="strategy-list">
               {strategyItems.map((item) => {
                 const isOpen = openItems.includes(item.id);
                 
@@ -842,7 +842,7 @@ const StrategyPanel: React.FC<StrategyPanelProps> = ({ onBacktestComplete }) => 
         <div className="mt-4 p-4">
           <button
             onClick={handleAddStrategy}
-            className="w-full flex items-center justify-center gap-2 p-3 rounded transition-all duration-200 hover:bg-gray-600/50"
+            className="add-strategy-button w-full flex items-center justify-center gap-2 p-3 rounded transition-all duration-200 hover:bg-gray-600/50"
             style={{ backgroundColor: '#2A2A2A', border: '1px dashed #6b7280' }}
           >
             <svg 
@@ -868,7 +868,7 @@ const StrategyPanel: React.FC<StrategyPanelProps> = ({ onBacktestComplete }) => 
           <button
             onClick={handleRunBacktest}
             disabled={isRunningBacktest}
-            className={`w-full flex items-center justify-center gap-2 p-4 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 ${
+            className={`run-backtest-button w-full flex items-center justify-center gap-2 p-4 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 ${
               isRunningBacktest 
                 ? 'cursor-not-allowed' 
                 : 'hover:bg-green-700 cursor-pointer'

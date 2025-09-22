@@ -36,8 +36,8 @@ const SynchronizedCharts: React.FC<SynchronizedChartsProps> = ({ backtestResult 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ErrorState | null>(null);
   const [startIndex, setStartIndex] = useState(0);
-  const [endIndex, setEndIndex] = useState(30);
-  const [selectedRange, setSelectedRange] = useState(30);
+  const [endIndex, setEndIndex] = useState(365);
+  const [selectedRange, setSelectedRange] = useState(365);
 
   const loadChartData = async () => {
     try {
@@ -47,7 +47,7 @@ const SynchronizedCharts: React.FC<SynchronizedChartsProps> = ({ backtestResult 
       setStockData(apiStockData);
       setRsiData(apiRsiData);
       
-      // Set initial view to show the last 30 days
+      // Set initial view to show the last year
       const totalDays = apiStockData.length;
       const viewDays = selectedRange;
       setStartIndex(Math.max(0, totalDays - viewDays));
