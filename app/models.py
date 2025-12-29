@@ -25,6 +25,12 @@ class StrategyConfig(BaseModel):
     fast_period: Optional[int] = Field(None, ge=1, le=200, description="MACD fast period")
     slow_period: Optional[int] = Field(None, ge=1, le=200, description="MACD slow period")
     signal_period: Optional[int] = Field(None, ge=1, le=200, description="MACD signal period")
+    std_dev: Optional[float] = Field(None, ge=0.1, le=5.0, description="Bollinger Bands standard deviation")
+    k_period: Optional[int] = Field(None, ge=1, le=200, description="Stochastic Oscillator K period")
+    d_period: Optional[int] = Field(None, ge=1, le=200, description="Stochastic Oscillator D period")
+    af_start: Optional[float] = Field(None, ge=0.001, le=0.5, description="Parabolic SAR acceleration factor start")
+    af_increment: Optional[float] = Field(None, ge=0.001, le=0.5, description="Parabolic SAR acceleration factor increment")
+    af_max: Optional[float] = Field(None, ge=0.01, le=1.0, description="Parabolic SAR acceleration factor maximum")
 
 class BacktestRequest(BaseModel):
     ticker: str

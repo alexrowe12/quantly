@@ -1,12 +1,15 @@
 # Processes the initial csv into a clean dataframe
 
 import pandas as pd
+import logging
+
+logger = logging.getLogger(__name__)
 
 def proc_df(csv_path: str) -> pd.DataFrame:
-    print('Reading CSV...')
+    logger.info('Reading CSV...')
     df = pd.read_csv(csv_path)
 
-    print('Prepping df...')
+    logger.info('Prepping df...')
     df = df.drop(columns=df.columns[0])
     df['date'] = pd.to_datetime(df['date'], format='%Y%m%d  %H:%M:%S')
     df = df.set_index('date')

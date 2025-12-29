@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -20,6 +20,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { runBacktest } from '../services/api';
+import toast from 'react-hot-toast';
 
 interface BacktestResult {
   starting_value: number;
@@ -50,6 +51,12 @@ interface StrategyItem {
   fast_period?: number; // MACD specific
   slow_period?: number; // MACD specific
   signal_period?: number; // MACD specific
+  std_dev?: number; // Bollinger Bands specific
+  k_period?: number; // Stochastic specific
+  d_period?: number; // Stochastic specific
+  af_start?: number; // Parabolic SAR specific
+  af_increment?: number; // Parabolic SAR specific
+  af_max?: number; // Parabolic SAR specific
 }
 
 interface SortableStrategyItemProps {
@@ -63,7 +70,7 @@ interface SortableStrategyItemProps {
 
 function SortableStrategyItem({ item, isOpen, onToggle, onDelete, onActionChange, onStrategyChange }: SortableStrategyItemProps) {
   const [isEditingName, setIsEditingName] = useState(false);
-  const strategyTypes = ['Moving Average', 'MACD', 'RSI', 'Bollinger Bands', 'Stochastic'];
+  const strategyTypes = ['Moving Average', 'MACD', 'RSI', 'Bollinger Bands', 'Stochastic', 'ATR', 'ADX', 'VWAP', 'OBV', 'Parabolic SAR'];
   
   const {
     attributes,
@@ -80,26 +87,49 @@ function SortableStrategyItem({ item, isOpen, onToggle, onDelete, onActionChange
     opacity: isDragging ? 0.5 : 1,
   };
 
-  const getValidationLimits = (strategyName: string, field: 'threshold' | 'period' | 'trade_percent' | 'fast_period' | 'slow_period' | 'signal_period') => {
+  const getValidationLimits = (strategyName: string, field: 'threshold' | 'period' | 'trade_percent' | 'fast_period' | 'slow_period' | 'signal_period' | 'std_dev' | 'k_period' | 'd_period' | 'af_start' | 'af_increment' | 'af_max') => {
     const limits = {
       'Moving Average': { threshold: { min: 0, max: 1000 }, period: { min: 2, max: 200 }, trade_percent: { min: 0.01, max: 1.0 } },
-      'MACD': { 
-        threshold: { min: -100, max: 100 }, 
-        period: { min: 5, max: 50 }, 
+      'MACD': {
+        threshold: { min: -100, max: 100 },
+        period: { min: 5, max: 50 },
         trade_percent: { min: 0.01, max: 1.0 },
         fast_period: { min: 5, max: 50 },
         slow_period: { min: 10, max: 100 },
         signal_period: { min: 3, max: 30 }
       },
       'RSI': { threshold: { min: 0, max: 100 }, period: { min: 2, max: 50 }, trade_percent: { min: 0.01, max: 1.0 } },
-      'Bollinger Bands': { threshold: { min: 0, max: 10 }, period: { min: 5, max: 100 }, trade_percent: { min: 0.01, max: 1.0 } },
-      'Stochastic': { threshold: { min: 0, max: 100 }, period: { min: 5, max: 50 }, trade_percent: { min: 0.01, max: 1.0 } }
+      'Bollinger Bands': {
+        threshold: { min: 0, max: 10 },
+        period: { min: 5, max: 100 },
+        trade_percent: { min: 0.01, max: 1.0 },
+        std_dev: { min: 0.5, max: 5.0 }
+      },
+      'Stochastic': {
+        threshold: { min: 0, max: 100 },
+        period: { min: 5, max: 50 },
+        trade_percent: { min: 0.01, max: 1.0 },
+        k_period: { min: 5, max: 50 },
+        d_period: { min: 2, max: 20 }
+      },
+      'ATR': { threshold: { min: 0, max: 100 }, period: { min: 5, max: 50 }, trade_percent: { min: 0.01, max: 1.0 } },
+      'ADX': { threshold: { min: 0, max: 100 }, period: { min: 5, max: 50 }, trade_percent: { min: 0.01, max: 1.0 } },
+      'VWAP': { threshold: { min: 0, max: 10000 }, period: { min: 1, max: 1 }, trade_percent: { min: 0.01, max: 1.0 } },
+      'OBV': { threshold: { min: -1000000000, max: 1000000000 }, period: { min: 1, max: 1 }, trade_percent: { min: 0.01, max: 1.0 } },
+      'Parabolic SAR': {
+        threshold: { min: 0, max: 1000 },
+        period: { min: 1, max: 1 },
+        trade_percent: { min: 0.01, max: 1.0 },
+        af_start: { min: 0.01, max: 0.1 },
+        af_increment: { min: 0.01, max: 0.1 },
+        af_max: { min: 0.1, max: 0.5 }
+      }
     };
-    
+
     return limits[strategyName as keyof typeof limits]?.[field] || { min: 0, max: 1000 };
   };
 
-  const isValidValue = (value: number, strategyName: string, field: 'threshold' | 'period' | 'trade_percent' | 'fast_period' | 'slow_period' | 'signal_period') => {
+  const isValidValue = (value: number, strategyName: string, field: 'threshold' | 'period' | 'trade_percent' | 'fast_period' | 'slow_period' | 'signal_period' | 'std_dev' | 'k_period' | 'd_period' | 'af_start' | 'af_increment' | 'af_max') => {
     const limits = getValidationLimits(strategyName, field);
     return !isNaN(value) && value >= limits.min && value <= limits.max;
   };
@@ -189,18 +219,25 @@ function SortableStrategyItem({ item, isOpen, onToggle, onDelete, onActionChange
       </button>
 
       {/* Accordion Content */}
-      <div 
+      <div
         className="overflow-hidden transition-all duration-300 ease-in-out"
-        style={{ 
-          maxHeight: isOpen ? (item.name === 'MACD' ? '300px' : '200px') : '0px',
+        style={{
+          maxHeight: isOpen ? (
+            item.name === 'MACD' ? '300px' :
+            item.name === 'Parabolic SAR' ? '300px' :
+            item.name === 'Bollinger Bands' ? '250px' :
+            item.name === 'Stochastic' ? '280px' :
+            '200px'
+          ) : '0px',
           backgroundColor: isOpen ? '#3E3E3E' : 'transparent'
         }}
       >
         <div className="p-4 relative">
           {/* Strategy Configuration */}
           <div className="space-y-3">
+            {/* Action selector - show for all */}
             <div className="flex items-center gap-2">
-              <select 
+              <select
                 className="text-white px-3 py-1 rounded border border-gray-500 text-sm"
                 style={{ backgroundColor: '#2A2A2A' }}
                 value={item.action}
@@ -209,65 +246,64 @@ function SortableStrategyItem({ item, isOpen, onToggle, onDelete, onActionChange
                 <option value="Buy">Buy</option>
                 <option value="Sell">Sell</option>
               </select>
-              
-              <select 
-                className="text-white px-3 py-1 rounded border border-gray-500 text-sm"
-                style={{ backgroundColor: '#2A2A2A' }}
-                value={item.operator}
-                onChange={(e) => onStrategyChange(item.id, { operator: e.target.value as '<' | '>' | '=' })}
-              >
-                <option value="<">&lt;</option>
-                <option value=">">&gt;</option>
-                <option value="=">=</option>
-              </select>
-              
-              <input 
-                type="number" 
-                value={item.threshold}
-                onChange={(e) => {
-                  const value = parseFloat(e.target.value);
-                  const limits = getValidationLimits(item.name, 'threshold');
-                  if (!isNaN(value) && value >= limits.min && value <= limits.max) {
-                    onStrategyChange(item.id, { threshold: value });
-                  }
-                }}
-                min={getValidationLimits(item.name, 'threshold').min}
-                max={getValidationLimits(item.name, 'threshold').max}
-                className={`text-white px-3 py-1 rounded text-sm w-16 ${
-                  isValidValue(item.threshold, item.name, 'threshold') 
-                    ? 'border border-gray-500' 
-                    : 'border-2 border-red-500'
-                }`}
-                style={{ backgroundColor: '#2A2A2A' }}
-              />
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="text-gray-300 text-sm">Period:</span>
-              <input 
-                type="number"
-                value={item.period}
-                onChange={(e) => {
-                  const value = parseInt(e.target.value);
-                  const limits = getValidationLimits(item.name, 'period');
-                  if (!isNaN(value) && value >= limits.min && value <= limits.max) {
-                    onStrategyChange(item.id, { period: value });
-                  }
-                }}
-                min={getValidationLimits(item.name, 'period').min}
-                max={getValidationLimits(item.name, 'period').max}
-                className={`text-white px-3 py-1 rounded text-sm w-16 ${
-                  isValidValue(item.period, item.name, 'period') 
-                    ? 'border border-gray-500' 
-                    : 'border-2 border-red-500'
-                }`}
-                style={{ backgroundColor: '#2A2A2A' }}
-              />
-            </div>
+            {/* Threshold field - show for RSI, Stochastic, ADX, ATR */}
+            {(item.name === 'RSI' || item.name === 'Stochastic' || item.name === 'ADX' || item.name === 'ATR') && (
+              <div className="flex items-center gap-2">
+                <span className="text-gray-300 text-sm">Threshold:</span>
+                <input
+                  type="number"
+                  value={item.threshold}
+                  onChange={(e) => {
+                    const value = parseFloat(e.target.value);
+                    const limits = getValidationLimits(item.name, 'threshold');
+                    if (!isNaN(value) && value >= limits.min && value <= limits.max) {
+                      onStrategyChange(item.id, { threshold: value });
+                    }
+                  }}
+                  min={getValidationLimits(item.name, 'threshold').min}
+                  max={getValidationLimits(item.name, 'threshold').max}
+                  className={`text-white px-3 py-1 rounded text-sm w-16 ${
+                    isValidValue(item.threshold, item.name, 'threshold')
+                      ? 'border border-gray-500'
+                      : 'border-2 border-red-500'
+                  }`}
+                  style={{ backgroundColor: '#2A2A2A' }}
+                />
+              </div>
+            )}
 
+            {/* Period field - show for most indicators except VWAP, OBV, Parabolic SAR, MACD */}
+            {!['VWAP', 'OBV', 'Parabolic SAR', 'MACD', 'Bollinger Bands', 'Stochastic'].includes(item.name) && (
+              <div className="flex items-center gap-2">
+                <span className="text-gray-300 text-sm">Period:</span>
+                <input
+                  type="number"
+                  value={item.period}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value);
+                    const limits = getValidationLimits(item.name, 'period');
+                    if (!isNaN(value) && value >= limits.min && value <= limits.max) {
+                      onStrategyChange(item.id, { period: value });
+                    }
+                  }}
+                  min={getValidationLimits(item.name, 'period').min}
+                  max={getValidationLimits(item.name, 'period').max}
+                  className={`text-white px-3 py-1 rounded text-sm w-16 ${
+                    isValidValue(item.period, item.name, 'period')
+                      ? 'border border-gray-500'
+                      : 'border-2 border-red-500'
+                  }`}
+                  style={{ backgroundColor: '#2A2A2A' }}
+                />
+              </div>
+            )}
+
+            {/* Trade % - show for all */}
             <div className="flex items-center gap-2">
               <span className="text-gray-300 text-sm">Trade %:</span>
-              <input 
+              <input
                 type="number"
                 step="0.01"
                 value={item.trade_percent}
@@ -281,8 +317,8 @@ function SortableStrategyItem({ item, isOpen, onToggle, onDelete, onActionChange
                 min={getValidationLimits(item.name, 'trade_percent').min}
                 max={getValidationLimits(item.name, 'trade_percent').max}
                 className={`text-white px-3 py-1 rounded text-sm w-16 ${
-                  isValidValue(item.trade_percent, item.name, 'trade_percent') 
-                    ? 'border border-gray-500' 
+                  isValidValue(item.trade_percent, item.name, 'trade_percent')
+                    ? 'border border-gray-500'
                     : 'border-2 border-red-500'
                 }`}
                 style={{ backgroundColor: '#2A2A2A' }}
@@ -362,6 +398,186 @@ function SortableStrategyItem({ item, isOpen, onToggle, onDelete, onActionChange
                 </div>
               </>
             )}
+
+            {/* Bollinger Bands-specific fields */}
+            {item.name === 'Bollinger Bands' && (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-300 text-sm">Period:</span>
+                  <input
+                    type="number"
+                    value={item.period}
+                    onChange={(e) => {
+                      const value = parseInt(e.target.value);
+                      const limits = getValidationLimits(item.name, 'period');
+                      if (!isNaN(value) && value >= limits.min && value <= limits.max) {
+                        onStrategyChange(item.id, { period: value });
+                      }
+                    }}
+                    min={getValidationLimits(item.name, 'period').min}
+                    max={getValidationLimits(item.name, 'period').max}
+                    className={`text-white px-3 py-1 rounded text-sm w-16 ${
+                      isValidValue(item.period, item.name, 'period')
+                        ? 'border border-gray-500'
+                        : 'border-2 border-red-500'
+                    }`}
+                    style={{ backgroundColor: '#2A2A2A' }}
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-300 text-sm">Std Dev:</span>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={item.std_dev || 2.0}
+                    onChange={(e) => {
+                      const value = parseFloat(e.target.value);
+                      const limits = getValidationLimits(item.name, 'std_dev');
+                      if (!isNaN(value) && value >= limits.min && value <= limits.max) {
+                        onStrategyChange(item.id, { std_dev: value });
+                      }
+                    }}
+                    min={getValidationLimits(item.name, 'std_dev').min}
+                    max={getValidationLimits(item.name, 'std_dev').max}
+                    className={`text-white px-3 py-1 rounded text-sm w-16 ${
+                      isValidValue(item.std_dev || 2.0, item.name, 'std_dev')
+                        ? 'border border-gray-500'
+                        : 'border-2 border-red-500'
+                    }`}
+                    style={{ backgroundColor: '#2A2A2A' }}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Stochastic-specific fields */}
+            {item.name === 'Stochastic' && (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-300 text-sm">K Period:</span>
+                  <input
+                    type="number"
+                    value={item.k_period || 14}
+                    onChange={(e) => {
+                      const value = parseInt(e.target.value);
+                      const limits = getValidationLimits(item.name, 'k_period');
+                      if (!isNaN(value) && value >= limits.min && value <= limits.max) {
+                        onStrategyChange(item.id, { k_period: value });
+                      }
+                    }}
+                    min={getValidationLimits(item.name, 'k_period').min}
+                    max={getValidationLimits(item.name, 'k_period').max}
+                    className={`text-white px-3 py-1 rounded text-sm w-16 ${
+                      isValidValue(item.k_period || 14, item.name, 'k_period')
+                        ? 'border border-gray-500'
+                        : 'border-2 border-red-500'
+                    }`}
+                    style={{ backgroundColor: '#2A2A2A' }}
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-300 text-sm">D Period:</span>
+                  <input
+                    type="number"
+                    value={item.d_period || 3}
+                    onChange={(e) => {
+                      const value = parseInt(e.target.value);
+                      const limits = getValidationLimits(item.name, 'd_period');
+                      if (!isNaN(value) && value >= limits.min && value <= limits.max) {
+                        onStrategyChange(item.id, { d_period: value });
+                      }
+                    }}
+                    min={getValidationLimits(item.name, 'd_period').min}
+                    max={getValidationLimits(item.name, 'd_period').max}
+                    className={`text-white px-3 py-1 rounded text-sm w-16 ${
+                      isValidValue(item.d_period || 3, item.name, 'd_period')
+                        ? 'border border-gray-500'
+                        : 'border-2 border-red-500'
+                    }`}
+                    style={{ backgroundColor: '#2A2A2A' }}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Parabolic SAR-specific fields */}
+            {item.name === 'Parabolic SAR' && (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-300 text-sm">AF Start:</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={item.af_start || 0.02}
+                    onChange={(e) => {
+                      const value = parseFloat(e.target.value);
+                      const limits = getValidationLimits(item.name, 'af_start');
+                      if (!isNaN(value) && value >= limits.min && value <= limits.max) {
+                        onStrategyChange(item.id, { af_start: value });
+                      }
+                    }}
+                    min={getValidationLimits(item.name, 'af_start').min}
+                    max={getValidationLimits(item.name, 'af_start').max}
+                    className={`text-white px-3 py-1 rounded text-sm w-16 ${
+                      isValidValue(item.af_start || 0.02, item.name, 'af_start')
+                        ? 'border border-gray-500'
+                        : 'border-2 border-red-500'
+                    }`}
+                    style={{ backgroundColor: '#2A2A2A' }}
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-300 text-sm">AF Increment:</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={item.af_increment || 0.02}
+                    onChange={(e) => {
+                      const value = parseFloat(e.target.value);
+                      const limits = getValidationLimits(item.name, 'af_increment');
+                      if (!isNaN(value) && value >= limits.min && value <= limits.max) {
+                        onStrategyChange(item.id, { af_increment: value });
+                      }
+                    }}
+                    min={getValidationLimits(item.name, 'af_increment').min}
+                    max={getValidationLimits(item.name, 'af_increment').max}
+                    className={`text-white px-3 py-1 rounded text-sm w-16 ${
+                      isValidValue(item.af_increment || 0.02, item.name, 'af_increment')
+                        ? 'border border-gray-500'
+                        : 'border-2 border-red-500'
+                    }`}
+                    style={{ backgroundColor: '#2A2A2A' }}
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-300 text-sm">AF Max:</span>
+                  <input
+                    type="number"
+                    step="0.05"
+                    value={item.af_max || 0.2}
+                    onChange={(e) => {
+                      const value = parseFloat(e.target.value);
+                      const limits = getValidationLimits(item.name, 'af_max');
+                      if (!isNaN(value) && value >= limits.min && value <= limits.max) {
+                        onStrategyChange(item.id, { af_max: value });
+                      }
+                    }}
+                    min={getValidationLimits(item.name, 'af_max').min}
+                    max={getValidationLimits(item.name, 'af_max').max}
+                    className={`text-white px-3 py-1 rounded text-sm w-16 ${
+                      isValidValue(item.af_max || 0.2, item.name, 'af_max')
+                        ? 'border border-gray-500'
+                        : 'border-2 border-red-500'
+                    }`}
+                    style={{ backgroundColor: '#2A2A2A' }}
+                  />
+                </div>
+              </>
+            )}
           </div>
           
           {/* Delete Button */}
@@ -404,6 +620,12 @@ const StrategyPanel: React.FC<StrategyPanelProps> = ({ onBacktestComplete }) => 
   const [isRunningBacktest, setIsRunningBacktest] = useState(false);
   const [backtestResult, setBacktestResult] = useState<BacktestResponse | null>(null);
   const [showResultModal, setShowResultModal] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  // Only render DndContext on client side to avoid hydration errors
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -504,15 +726,67 @@ const StrategyPanel: React.FC<StrategyPanelProps> = ({ onBacktestComplete }) => 
     );
   };
 
+  const getValidationLimits = (strategyName: string, field: 'threshold' | 'period' | 'trade_percent' | 'fast_period' | 'slow_period' | 'signal_period' | 'std_dev' | 'k_period' | 'd_period' | 'af_start' | 'af_increment' | 'af_max') => {
+    const limits = {
+      'Moving Average': { threshold: { min: 0, max: 1000 }, period: { min: 2, max: 200 }, trade_percent: { min: 0.01, max: 1.0 } },
+      'MACD': {
+        threshold: { min: -100, max: 100 },
+        period: { min: 1, max: 1 },
+        trade_percent: { min: 0.01, max: 1.0 },
+        fast_period: { min: 5, max: 50 },
+        slow_period: { min: 10, max: 100 },
+        signal_period: { min: 5, max: 50 }
+      },
+      'RSI': { threshold: { min: 0, max: 100 }, period: { min: 5, max: 50 }, trade_percent: { min: 0.01, max: 1.0 } },
+      'Bollinger Bands': {
+        threshold: { min: 0, max: 1000 },
+        period: { min: 5, max: 100 },
+        trade_percent: { min: 0.01, max: 1.0 },
+        std_dev: { min: 0.5, max: 5.0 }
+      },
+      'Stochastic': {
+        threshold: { min: 0, max: 100 },
+        period: { min: 1, max: 1 },
+        trade_percent: { min: 0.01, max: 1.0 },
+        k_period: { min: 5, max: 30 },
+        d_period: { min: 2, max: 20 }
+      },
+      'ATR': { threshold: { min: 0, max: 100 }, period: { min: 5, max: 50 }, trade_percent: { min: 0.01, max: 1.0 } },
+      'ADX': { threshold: { min: 0, max: 100 }, period: { min: 5, max: 50 }, trade_percent: { min: 0.01, max: 1.0 } },
+      'VWAP': { threshold: { min: 0, max: 10000 }, period: { min: 1, max: 1 }, trade_percent: { min: 0.01, max: 1.0 } },
+      'OBV': { threshold: { min: -1000000000, max: 1000000000 }, period: { min: 1, max: 1 }, trade_percent: { min: 0.01, max: 1.0 } },
+      'Parabolic SAR': {
+        threshold: { min: 0, max: 1000 },
+        period: { min: 1, max: 1 },
+        trade_percent: { min: 0.01, max: 1.0 },
+        af_start: { min: 0.01, max: 0.1 },
+        af_increment: { min: 0.01, max: 0.1 },
+        af_max: { min: 0.1, max: 0.5 }
+      }
+    };
+
+    return limits[strategyName as keyof typeof limits]?.[field] || { min: 0, max: 1000 };
+  };
+
+  const isValidValue = (value: number, strategyName: string, field: 'threshold' | 'period' | 'trade_percent' | 'fast_period' | 'slow_period' | 'signal_period' | 'std_dev' | 'k_period' | 'd_period' | 'af_start' | 'af_increment' | 'af_max') => {
+    const limits = getValidationLimits(strategyName, field);
+    return !isNaN(value) && value >= limits.min && value <= limits.max;
+  };
+
   const mapStrategyToBackendName = (strategyName: string, action: 'Buy' | 'Sell'): string => {
     const strategyMap: { [key: string]: { buy: string; sell: string } } = {
       'RSI': { buy: 'rsi_oversold', sell: 'rsi_overbought' },
       'Moving Average': { buy: 'sma_buy', sell: 'sma_sell' },
       'MACD': { buy: 'macd_buy', sell: 'macd_sell' },
-      'Bollinger Bands': { buy: 'sma_buy', sell: 'sma_sell' }, // Using SMA for now
-      'Stochastic': { buy: 'rsi_oversold', sell: 'rsi_overbought' } // Using RSI for now
+      'Bollinger Bands': { buy: 'bb_lower_buy', sell: 'bb_upper_sell' },
+      'Stochastic': { buy: 'stoch_oversold', sell: 'stoch_overbought' },
+      'ATR': { buy: 'atr_buy', sell: 'atr_sell' },
+      'ADX': { buy: 'adx_strong_trend_buy', sell: 'adx_strong_trend_sell' },
+      'VWAP': { buy: 'vwap_buy', sell: 'vwap_sell' },
+      'OBV': { buy: 'obv_rising_buy', sell: 'obv_falling_sell' },
+      'Parabolic SAR': { buy: 'psar_buy', sell: 'psar_sell' }
     };
-    
+
     return strategyMap[strategyName]?.[action.toLowerCase() as 'buy' | 'sell'] || 'rsi_oversold';
   };
 
@@ -531,25 +805,87 @@ const StrategyPanel: React.FC<StrategyPanelProps> = ({ onBacktestComplete }) => 
       backendStrategy.signal_period = strategy.signal_period || 9;
     }
 
+    // Add Bollinger Bands-specific fields
+    if (strategy.name === 'Bollinger Bands') {
+      backendStrategy.std_dev = strategy.std_dev || 2.0;
+    }
+
+    // Add Stochastic-specific fields
+    if (strategy.name === 'Stochastic') {
+      backendStrategy.k_period = strategy.k_period || 14;
+      backendStrategy.d_period = strategy.d_period || 3;
+    }
+
+    // Add Parabolic SAR-specific fields
+    if (strategy.name === 'Parabolic SAR') {
+      backendStrategy.af_start = strategy.af_start || 0.02;
+      backendStrategy.af_increment = strategy.af_increment || 0.02;
+      backendStrategy.af_max = strategy.af_max || 0.2;
+    }
+
     return backendStrategy;
   };
 
   const handleRunBacktest = async () => {
-    if (isRunningBacktest) return; // Prevent multiple simultaneous requests
-    
+    if (isRunningBacktest) {
+      toast.error('A backtest is already running. Please wait for it to complete.');
+      return;
+    }
+
+    // Validate strategies exist
+    if (strategyItems.length === 0) {
+      toast.error('Please add at least one strategy before running a backtest.');
+      return;
+    }
+
+    // Validate all strategy values
+    const invalidStrategies = strategyItems.filter(item => {
+      // Check trade percent
+      if (!item.trade_percent || item.trade_percent <= 0 || item.trade_percent > 1) {
+        return true;
+      }
+
+      // Check strategy-specific fields
+      if (item.name === 'RSI' || item.name === 'Stochastic' || item.name === 'ADX' || item.name === 'ATR') {
+        if (item.threshold === undefined || !isValidValue(item.threshold, item.name, 'threshold')) {
+          return true;
+        }
+      }
+
+      if (!['VWAP', 'OBV', 'Parabolic SAR', 'MACD', 'Bollinger Bands', 'Stochastic'].includes(item.name)) {
+        if (item.period === undefined || !isValidValue(item.period, item.name, 'period')) {
+          return true;
+        }
+      }
+
+      return false;
+    });
+
+    if (invalidStrategies.length > 0) {
+      toast.error(`Please fix invalid values in ${invalidStrategies.length} strategy(ies) before running backtest.`);
+      return;
+    }
+
     setIsRunningBacktest(true);
-    
+
     try {
       console.log('Running backtest with strategies:', strategyItems);
-      
+
       // Separate strategies by action
       const buyStrategies = strategyItems
         .filter(s => s.action === 'Buy')
         .map(convertStrategyToBackend);
-      
+
       const sellStrategies = strategyItems
         .filter(s => s.action === 'Sell')
         .map(convertStrategyToBackend);
+
+      // Validate at least one strategy of each type
+      if (buyStrategies.length === 0 && sellStrategies.length === 0) {
+        toast.error('Please configure at least one buy or sell strategy.');
+        setIsRunningBacktest(false);
+        return;
+      }
 
       console.log('Converted buy strategies:', buyStrategies);
       console.log('Converted sell strategies:', sellStrategies);
@@ -566,9 +902,9 @@ const StrategyPanel: React.FC<StrategyPanelProps> = ({ onBacktestComplete }) => 
 
       console.log('Sending backtest request:', backtestRequest);
 
-      // Call the API
+      // Call the API (will show loading toast automatically)
       const result = await runBacktest(backtestRequest);
-      
+
       console.log('Backtest completed successfully!');
       console.log('Backtest ID:', result.b_id);
       console.log('Starting value:', result.result.starting_value);
@@ -585,9 +921,10 @@ const StrategyPanel: React.FC<StrategyPanelProps> = ({ onBacktestComplete }) => 
         onBacktestComplete(result);
       }
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Backtest failed:', error);
-      // TODO: Show user-friendly error message
+      // Error is already handled and shown via toast in api.ts
+      // Just log it here for debugging
     } finally {
       setIsRunningBacktest(false);
     }
@@ -809,34 +1146,54 @@ const StrategyPanel: React.FC<StrategyPanelProps> = ({ onBacktestComplete }) => 
         </div>
 
         {/* Accordion Items */}
-        <DndContext 
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-        >
-          <SortableContext 
-            items={strategyItems.map(item => item.id)} 
-            strategy={verticalListSortingStrategy}
+        {mounted ? (
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
           >
-            <div className="strategy-list">
-              {strategyItems.map((item) => {
-                const isOpen = openItems.includes(item.id);
-                
-                return (
-                  <SortableStrategyItem
-                    key={item.id}
-                    item={item}
-                    isOpen={isOpen}
-                    onToggle={toggleItem}
-                    onDelete={handleDeleteStrategy}
-                    onActionChange={handleActionChange}
-                    onStrategyChange={handleStrategyChange}
-                  />
-                );
-              })}
-            </div>
-          </SortableContext>
-        </DndContext>
+            <SortableContext
+              items={strategyItems.map(item => item.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="strategy-list">
+                {strategyItems.map((item) => {
+                  const isOpen = openItems.includes(item.id);
+
+                  return (
+                    <SortableStrategyItem
+                      key={item.id}
+                      item={item}
+                      isOpen={isOpen}
+                      onToggle={toggleItem}
+                      onDelete={handleDeleteStrategy}
+                      onActionChange={handleActionChange}
+                      onStrategyChange={handleStrategyChange}
+                    />
+                  );
+                })}
+              </div>
+            </SortableContext>
+          </DndContext>
+        ) : (
+          <div className="strategy-list">
+            {strategyItems.map((item) => {
+              const isOpen = openItems.includes(item.id);
+
+              return (
+                <SortableStrategyItem
+                  key={item.id}
+                  item={item}
+                  isOpen={isOpen}
+                  onToggle={toggleItem}
+                  onDelete={handleDeleteStrategy}
+                  onActionChange={handleActionChange}
+                  onStrategyChange={handleStrategyChange}
+                />
+              );
+            })}
+          </div>
+        )}
         
         {/* Add Strategy Button */}
         <div className="mt-4 p-4">

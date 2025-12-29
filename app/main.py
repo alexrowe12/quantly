@@ -3,8 +3,15 @@
 import os
 import uuid
 import traceback
+import logging
 from datetime import datetime
 from typing import List, Dict, Any
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 
 from fastapi import FastAPI, HTTPException, Header, Depends, Query, Request
 from fastapi.responses import Response
@@ -28,6 +35,9 @@ from .db import SessionLocal
 load_dotenv()
 API_KEY = os.getenv("API_KEY", "CHANGE_THIS")
 
+# CORS origins - comma-separated list in .env, defaults to localhost
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+
 # — FastAPI setup —
 app = FastAPI(
     title="Quantly Backtest API",
@@ -37,7 +47,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
@@ -126,18 +136,40 @@ class PriceData(BaseModel):
     status_code=200,
     dependencies=[Depends(verify_api_key)],
 )
-def backtest(req: BacktestRequest):
+def backtest(req: BacktestRequest, db: Session = Depends(get_db)):
     """Run a backtest with comprehensive error handling and validation"""
     try:
         # Additional validation
         if not req.ticker or not req.ticker.strip():
             raise HTTPException(status_code=400, detail="Ticker symbol is required and cannot be empty")
-        
+
+        # Normalize ticker
+        req.ticker = req.ticker.strip().upper()
+
         if req.starting_value <= 0:
-            raise HTTPException(status_code=400, detail="Starting value must be greater than 0")
-        
+            raise HTTPException(status_code=400, detail="Starting value must be greater than 0. Please enter a positive dollar amount.")
+
         if len(req.buy_strategies) == 0 and len(req.sell_strategies) == 0:
-            raise HTTPException(status_code=400, detail="At least one buy or sell strategy must be provided")
+            raise HTTPException(status_code=400, detail="At least one buy or sell strategy must be configured. Please add a strategy before running backtest.")
+
+        # Validate ticker exists in database
+        ticker_check_sql = """
+            SELECT COUNT(*) as count FROM price_data WHERE ticker = :ticker
+        """
+        ticker_result = db.execute(text(ticker_check_sql), {"ticker": req.ticker}).mappings().first()
+
+        if not ticker_result or ticker_result['count'] == 0:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No price data found for ticker '{req.ticker}'. Please check the ticker symbol or select from available tickers."
+            )
+
+        # Check if sufficient data exists
+        if ticker_result['count'] < 30:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient data for ticker '{req.ticker}'. Found only {ticker_result['count']} data points. At least 30 days of data is recommended for reliable backtesting."
+            )
         
         # Validate strategy configurations
         all_strategies = req.buy_strategies + req.sell_strategies
@@ -399,3 +431,129 @@ def get_chart_data(
         print(f"Unexpected error in chart data endpoint: {e}")
         print(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail="An unexpected error occurred while fetching chart data")
+
+# ─────────────────────────────
+# TICKER VALIDATION ENDPOINTS
+# ─────────────────────────────
+
+class TickerInfo(BaseModel):
+    ticker: str
+    start_date: str
+    end_date: str
+    total_days: int
+
+class AvailableTickersResponse(BaseModel):
+    tickers: List[TickerInfo]
+    total_count: int
+
+@app.get(
+    "/api/tickers",
+    response_model=AvailableTickersResponse,
+    dependencies=[Depends(verify_api_key)],
+)
+def get_available_tickers(db: Session = Depends(get_db)):
+    """Get list of all available tickers with date ranges"""
+    try:
+        sql = """
+            SELECT
+                ticker,
+                MIN(DATE(timestamp)) as start_date,
+                MAX(DATE(timestamp)) as end_date,
+                COUNT(DISTINCT DATE(timestamp)) as total_days
+            FROM price_data
+            GROUP BY ticker
+            ORDER BY ticker
+        """
+
+        rows = db.execute(text(sql)).mappings().all()
+
+        if not rows:
+            return AvailableTickersResponse(tickers=[], total_count=0)
+
+        tickers = [
+            TickerInfo(
+                ticker=row['ticker'],
+                start_date=str(row['start_date']),
+                end_date=str(row['end_date']),
+                total_days=row['total_days']
+            )
+            for row in rows
+        ]
+
+        return AvailableTickersResponse(tickers=tickers, total_count=len(tickers))
+
+    except SQLAlchemyError as e:
+        print(f"Database error in tickers endpoint: {e}")
+        raise HTTPException(status_code=500, detail="Database error occurred while fetching available tickers")
+    except Exception as e:
+        print(f"Unexpected error in tickers endpoint: {e}")
+        raise HTTPException(status_code=500, detail="An unexpected error occurred while fetching tickers")
+
+class TickerValidationResponse(BaseModel):
+    exists: bool
+    ticker: str
+    start_date: str | None = None
+    end_date: str | None = None
+    total_days: int | None = None
+    message: str
+
+@app.get(
+    "/api/validate-ticker/{ticker}",
+    response_model=TickerValidationResponse,
+    dependencies=[Depends(verify_api_key)],
+)
+def validate_ticker(ticker: str, db: Session = Depends(get_db)):
+    """Validate if a ticker exists and return its data range"""
+    try:
+        ticker = ticker.strip().upper()
+
+        if not ticker:
+            raise HTTPException(status_code=400, detail="Ticker symbol cannot be empty")
+
+        sql = """
+            SELECT
+                ticker,
+                MIN(DATE(timestamp)) as start_date,
+                MAX(DATE(timestamp)) as end_date,
+                COUNT(DISTINCT DATE(timestamp)) as total_days
+            FROM price_data
+            WHERE ticker = :ticker
+            GROUP BY ticker
+        """
+
+        result = db.execute(text(sql), {"ticker": ticker}).mappings().first()
+
+        if not result:
+            return TickerValidationResponse(
+                exists=False,
+                ticker=ticker,
+                message=f"No data found for ticker '{ticker}'. Please check the ticker symbol or choose from available tickers."
+            )
+
+        if result['total_days'] < 30:
+            return TickerValidationResponse(
+                exists=True,
+                ticker=ticker,
+                start_date=str(result['start_date']),
+                end_date=str(result['end_date']),
+                total_days=result['total_days'],
+                message=f"Warning: Only {result['total_days']} days of data available. Recommend at least 30 days for reliable backtesting."
+            )
+
+        return TickerValidationResponse(
+            exists=True,
+            ticker=ticker,
+            start_date=str(result['start_date']),
+            end_date=str(result['end_date']),
+            total_days=result['total_days'],
+            message=f"Ticker '{ticker}' is available with {result['total_days']} days of data from {result['start_date']} to {result['end_date']}."
+        )
+
+    except HTTPException:
+        raise
+    except SQLAlchemyError as e:
+        print(f"Database error in validate ticker endpoint: {e}")
+        raise HTTPException(status_code=500, detail="Database error occurred while validating ticker")
+    except Exception as e:
+        print(f"Unexpected error in validate ticker endpoint: {e}")
+        raise HTTPException(status_code=500, detail="An unexpected error occurred while validating ticker")

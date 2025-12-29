@@ -110,6 +110,104 @@ def wma_sell(window: pd.DataFrame, period: int = 20):
     sig = p0 > w0 and p1 < w1
     return sig, {'strategy': f'wma_{period}_cross', 'value': p1}
 
+# Bollinger Bands strategies
+def bb_lower_buy(window: pd.DataFrame):
+    if 'bb_lower' not in window or len(window) < 1:
+        return False, {}
+    price = window['close'].iloc[-1]
+    bb_lower = window['bb_lower'].iloc[-1]
+    sig = price <= bb_lower
+    return sig, {'strategy': 'bb_lower_touch', 'value': price, 'threshold': bb_lower}
+
+def bb_upper_sell(window: pd.DataFrame):
+    if 'bb_upper' not in window or len(window) < 1:
+        return False, {}
+    price = window['close'].iloc[-1]
+    bb_upper = window['bb_upper'].iloc[-1]
+    sig = price >= bb_upper
+    return sig, {'strategy': 'bb_upper_touch', 'value': price, 'threshold': bb_upper}
+
+# Stochastic Oscillator strategies
+def stoch_oversold(window: pd.DataFrame, threshold: float = 20):
+    if 'stoch_k' not in window or len(window) < 1:
+        return False, {}
+    k_value = window['stoch_k'].iloc[-1]
+    sig = k_value < threshold
+    return sig, {'strategy': 'stoch_oversold', 'value': k_value, 'threshold': threshold}
+
+def stoch_overbought(window: pd.DataFrame, threshold: float = 80):
+    if 'stoch_k' not in window or len(window) < 1:
+        return False, {}
+    k_value = window['stoch_k'].iloc[-1]
+    sig = k_value > threshold
+    return sig, {'strategy': 'stoch_overbought', 'value': k_value, 'threshold': threshold}
+
+# ADX trend strength (used as filter, but can signal)
+def adx_strong_trend_buy(window: pd.DataFrame, threshold: float = 25):
+    if 'adx' not in window or len(window) < 2:
+        return False, {}
+    adx = window['adx'].iloc[-1]
+    price_up = window['close'].iloc[-1] > window['close'].iloc[-2]
+    sig = adx > threshold and price_up
+    return sig, {'strategy': 'adx_strong_trend', 'value': adx, 'threshold': threshold}
+
+def adx_strong_trend_sell(window: pd.DataFrame, threshold: float = 25):
+    if 'adx' not in window or len(window) < 2:
+        return False, {}
+    adx = window['adx'].iloc[-1]
+    price_down = window['close'].iloc[-1] < window['close'].iloc[-2]
+    sig = adx > threshold and price_down
+    return sig, {'strategy': 'adx_strong_trend', 'value': adx, 'threshold': threshold}
+
+# VWAP strategies
+def vwap_buy(window: pd.DataFrame):
+    if 'vwap' not in window or len(window) < 2:
+        return False, {}
+    p0, p1 = window['close'].iloc[-2], window['close'].iloc[-1]
+    v0, v1 = window['vwap'].iloc[-2], window['vwap'].iloc[-1]
+    sig = p0 < v0 and p1 > v1
+    return sig, {'strategy': 'vwap_cross', 'value': p1}
+
+def vwap_sell(window: pd.DataFrame):
+    if 'vwap' not in window or len(window) < 2:
+        return False, {}
+    p0, p1 = window['close'].iloc[-2], window['close'].iloc[-1]
+    v0, v1 = window['vwap'].iloc[-2], window['vwap'].iloc[-1]
+    sig = p0 > v0 and p1 < v1
+    return sig, {'strategy': 'vwap_cross', 'value': p1}
+
+# OBV strategies (looking for divergence or trend)
+def obv_rising_buy(window: pd.DataFrame):
+    if 'obv' not in window or len(window) < 2:
+        return False, {}
+    obv0, obv1 = window['obv'].iloc[-2], window['obv'].iloc[-1]
+    sig = obv1 > obv0
+    return sig, {'strategy': 'obv_rising', 'value': obv1}
+
+def obv_falling_sell(window: pd.DataFrame):
+    if 'obv' not in window or len(window) < 2:
+        return False, {}
+    obv0, obv1 = window['obv'].iloc[-2], window['obv'].iloc[-1]
+    sig = obv1 < obv0
+    return sig, {'strategy': 'obv_falling', 'value': obv1}
+
+# Parabolic SAR strategies
+def psar_buy(window: pd.DataFrame):
+    if 'psar' not in window or 'psar_trend' not in window or len(window) < 2:
+        return False, {}
+    trend0 = window['psar_trend'].iloc[-2]
+    trend1 = window['psar_trend'].iloc[-1]
+    sig = trend0 == 'down' and trend1 == 'up'
+    return sig, {'strategy': 'psar_reversal', 'value': window['psar'].iloc[-1]}
+
+def psar_sell(window: pd.DataFrame):
+    if 'psar' not in window or 'psar_trend' not in window or len(window) < 2:
+        return False, {}
+    trend0 = window['psar_trend'].iloc[-2]
+    trend1 = window['psar_trend'].iloc[-1]
+    sig = trend0 == 'up' and trend1 == 'down'
+    return sig, {'strategy': 'psar_reversal', 'value': window['psar'].iloc[-1]}
+
 buy_strategies = [
     rsi_oversold,
     macd_buy

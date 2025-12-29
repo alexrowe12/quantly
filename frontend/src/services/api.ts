@@ -210,6 +210,100 @@ export async function runBacktest(backtestData: BacktestRequest): Promise<Backte
   }
 }
 
+// Ticker validation interfaces
+export interface TickerInfo {
+  ticker: string;
+  start_date: string;
+  end_date: string;
+  total_days: number;
+}
+
+export interface AvailableTickersResponse {
+  tickers: TickerInfo[];
+  total_count: number;
+}
+
+export interface TickerValidationResponse {
+  exists: boolean;
+  ticker: string;
+  start_date?: string;
+  end_date?: string;
+  total_days?: number;
+  message: string;
+}
+
+// Get all available tickers
+export async function getAvailableTickers(): Promise<AvailableTickersResponse> {
+  try {
+    toast.loading('Loading available tickers...', { id: 'tickers' });
+
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/api/tickers`,
+      {
+        method: 'GET',
+        headers: {
+          'X-API-Key': API_KEY,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const errorMessage = errorData.detail || `Failed to load tickers (${response.status})`;
+      toast.error(errorMessage, { id: 'tickers' });
+      throw new ApiError(errorMessage, response.status, errorData);
+    }
+
+    const data: AvailableTickersResponse = await response.json();
+    toast.success(`Loaded ${data.total_count} available tickers`, { id: 'tickers' });
+
+    return data;
+  } catch (error) {
+    toast.dismiss('tickers');
+    handleApiError(error, 'Get available tickers');
+  }
+}
+
+// Validate a specific ticker
+export async function validateTicker(ticker: string): Promise<TickerValidationResponse> {
+  try {
+    if (!ticker || ticker.trim().length === 0) {
+      throw new ApiError('Ticker symbol is required', 400);
+    }
+
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/api/validate-ticker/${encodeURIComponent(ticker.trim().toUpperCase())}`,
+      {
+        method: 'GET',
+        headers: {
+          'X-API-Key': API_KEY,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const errorMessage = errorData.detail || `Failed to validate ticker (${response.status})`;
+      throw new ApiError(errorMessage, response.status, errorData);
+    }
+
+    const data: TickerValidationResponse = await response.json();
+
+    // Show appropriate message to user
+    if (!data.exists) {
+      toast.error(data.message, { duration: 4000 });
+    } else if (data.total_days && data.total_days < 30) {
+      toast.warning(data.message, { duration: 4000 });
+    }
+
+    return data;
+  } catch (error) {
+    handleApiError(error, 'Ticker validation');
+  }
+}
+
 export async function fetchChartData(ticker: string = 'SPY'): Promise<{
   stockData: StockData[];
   rsiData: RSIData[];

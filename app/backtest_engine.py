@@ -8,24 +8,42 @@ from data_proc.proc_df import proc_df
 from data_proc.calc_indicators_full import calc_indicators_full
 from strategy.main import (
     rsi_oversold, rsi_overbought,
-    macd_buy,    macd_sell,
-    sma_buy,     sma_sell,
-    ema_buy,     ema_sell,
-    wma_buy,     wma_sell,
+    macd_buy, macd_sell,
+    sma_buy, sma_sell,
+    ema_buy, ema_sell,
+    wma_buy, wma_sell,
+    bb_lower_buy, bb_upper_sell,
+    stoch_oversold, stoch_overbought,
+    adx_strong_trend_buy, adx_strong_trend_sell,
+    vwap_buy, vwap_sell,
+    obv_rising_buy, obv_falling_sell,
+    psar_buy, psar_sell,
 )
 
 # Map strategy names to functions
 STRATEGY_MAP = {
-    "rsi_oversold":  rsi_oversold,
-    "rsi_overbought":rsi_overbought,
-    "macd_buy":      macd_buy,
-    "macd_sell":     macd_sell,
-    "sma_buy":       sma_buy,
-    "sma_sell":      sma_sell,
-    "ema_buy":       ema_buy,
-    "ema_sell":      ema_sell,
-    "wma_buy":       wma_buy,
-    "wma_sell":      wma_sell,
+    "rsi_oversold": rsi_oversold,
+    "rsi_overbought": rsi_overbought,
+    "macd_buy": macd_buy,
+    "macd_sell": macd_sell,
+    "sma_buy": sma_buy,
+    "sma_sell": sma_sell,
+    "ema_buy": ema_buy,
+    "ema_sell": ema_sell,
+    "wma_buy": wma_buy,
+    "wma_sell": wma_sell,
+    "bb_lower_buy": bb_lower_buy,
+    "bb_upper_sell": bb_upper_sell,
+    "stoch_oversold": stoch_oversold,
+    "stoch_overbought": stoch_overbought,
+    "adx_strong_trend_buy": adx_strong_trend_buy,
+    "adx_strong_trend_sell": adx_strong_trend_sell,
+    "vwap_buy": vwap_buy,
+    "vwap_sell": vwap_sell,
+    "obv_rising_buy": obv_rising_buy,
+    "obv_falling_sell": obv_falling_sell,
+    "psar_buy": psar_buy,
+    "psar_sell": psar_sell,
 }
 
 def _calculate_required_indicators(df: pd.DataFrame, strategies: list) -> pd.DataFrame:
@@ -36,24 +54,44 @@ def _calculate_required_indicators(df: pd.DataFrame, strategies: list) -> pd.Dat
         calculate_sma_full,
         calculate_ema_full,
         calculate_wma_full,
+        calculate_bollinger_bands_full,
+        calculate_atr_full,
+        calculate_stochastic_full,
+        calculate_adx_full,
+        calculate_vwap_full,
+        calculate_obv_full,
+        calculate_psar_full,
     )
-    
+
     # Collect required indicators and their periods
     rsi_periods = set()
     sma_periods = set()
     ema_periods = set()
     wma_periods = set()
     macd_configs = set()
-    
+    bb_configs = set()
+    atr_periods = set()
+    stoch_configs = set()
+    adx_periods = set()
+    psar_configs = set()
+    needs_vwap = False
+    needs_obv = False
+
     for strategy in strategies:
         strategy_name = strategy["name"]
-        
+
         # Get periods with defaults if not specified
         period = strategy.get("period")
         fast_period = strategy.get("fast_period")
         slow_period = strategy.get("slow_period")
         signal_period = strategy.get("signal_period")
-        
+        std_dev = strategy.get("std_dev")
+        k_period = strategy.get("k_period")
+        d_period = strategy.get("d_period")
+        af_start = strategy.get("af_start")
+        af_increment = strategy.get("af_increment")
+        af_max = strategy.get("af_max")
+
         if "rsi" in strategy_name:
             rsi_periods.add(period or 14)
         elif "macd" in strategy_name:
@@ -67,7 +105,21 @@ def _calculate_required_indicators(df: pd.DataFrame, strategies: list) -> pd.Dat
             ema_periods.add(period or 20)
         elif "wma" in strategy_name:
             wma_periods.add(period or 20)
-    
+        elif "bb_" in strategy_name:
+            bb_configs.add((period or 20, std_dev or 2.0))
+        elif "atr" in strategy_name:
+            atr_periods.add(period or 14)
+        elif "stoch" in strategy_name:
+            stoch_configs.add((k_period or 14, d_period or 3))
+        elif "adx" in strategy_name:
+            adx_periods.add(period or 14)
+        elif "vwap" in strategy_name:
+            needs_vwap = True
+        elif "obv" in strategy_name:
+            needs_obv = True
+        elif "psar" in strategy_name:
+            psar_configs.add((af_start or 0.02, af_increment or 0.02, af_max or 0.2))
+
     # Calculate indicators for all required periods
     for period in rsi_periods:
         temp_df = calculate_rsi_full(df.copy(), period=period)
@@ -75,7 +127,7 @@ def _calculate_required_indicators(df: pd.DataFrame, strategies: list) -> pd.Dat
             df[f'rsi_{period}'] = temp_df['rsi']
         else:
             df['rsi'] = temp_df['rsi']
-    
+
     for fast, slow, signal in macd_configs:
         temp_df = calculate_macd_full(df.copy(), fast=fast, slow=slow, signal=signal)
         if (fast, slow, signal) != (12, 26, 9):  # Create named columns for non-default configs
@@ -86,17 +138,37 @@ def _calculate_required_indicators(df: pd.DataFrame, strategies: list) -> pd.Dat
             df['macd'] = temp_df['macd']
             df['macd_signal'] = temp_df['macd_signal']
             df['macd_hist'] = temp_df['macd_hist']
-    
-    
+
     for period in sma_periods:
         df = calculate_sma_full(df, period=period)
-    
+
     for period in ema_periods:
         df = calculate_ema_full(df, period=period)
-    
+
     for period in wma_periods:
         df = calculate_wma_full(df, period=period)
-    
+
+    for period, std_dev in bb_configs:
+        df = calculate_bollinger_bands_full(df, period=period, num_std=std_dev)
+
+    for period in atr_periods:
+        df = calculate_atr_full(df, period=period)
+
+    for k_period, d_period in stoch_configs:
+        df = calculate_stochastic_full(df, k_period=k_period, d_period=d_period)
+
+    for period in adx_periods:
+        df = calculate_adx_full(df, period=period)
+
+    if needs_vwap:
+        df = calculate_vwap_full(df)
+
+    if needs_obv:
+        df = calculate_obv_full(df)
+
+    for af_start, af_increment, af_max in psar_configs:
+        df = calculate_psar_full(df, af_start=af_start, af_increment=af_increment, af_max=af_max)
+
     return df
 
 def _create_strategy_function(strategy_config: dict):
@@ -227,7 +299,128 @@ def _create_strategy_function(strategy_config: dict):
             sig = p0 > w0 and p1 < w1
             return sig, {'strategy': strategy_name, 'value': p1}
         return strategy_func
-    
+
+    elif strategy_name == "bb_lower_buy":
+        def strategy_func(window):
+            if 'bb_lower' not in window or len(window) < 1:
+                return False, {}
+            price = window['close'].iloc[-1]
+            bb_lower = window['bb_lower'].iloc[-1]
+            sig = price <= bb_lower
+            return sig, {'strategy': strategy_name, 'value': price, 'threshold': bb_lower}
+        return strategy_func
+
+    elif strategy_name == "bb_upper_sell":
+        def strategy_func(window):
+            if 'bb_upper' not in window or len(window) < 1:
+                return False, {}
+            price = window['close'].iloc[-1]
+            bb_upper = window['bb_upper'].iloc[-1]
+            sig = price >= bb_upper
+            return sig, {'strategy': strategy_name, 'value': price, 'threshold': bb_upper}
+        return strategy_func
+
+    elif strategy_name == "atr_buy" or strategy_name == "atr_sell":
+        def strategy_func(window):
+            if 'atr' not in window or len(window) < 1:
+                return False, {}
+            atr_val = window['atr'].iloc[-1]
+            thresh = threshold or 1.5
+            if strategy_name == "atr_buy":
+                sig = atr_val > thresh  # High volatility
+            else:
+                sig = atr_val < thresh  # Low volatility
+            return sig, {'strategy': strategy_name, 'value': atr_val, 'threshold': thresh}
+        return strategy_func
+
+    elif strategy_name == "stoch_oversold":
+        def strategy_func(window):
+            if 'stoch_k' not in window or len(window) < 1:
+                return False, {}
+            stoch_k = window['stoch_k'].iloc[-1]
+            thresh = threshold or 20
+            sig = stoch_k < thresh
+            return sig, {'strategy': strategy_name, 'value': stoch_k, 'threshold': thresh}
+        return strategy_func
+
+    elif strategy_name == "stoch_overbought":
+        def strategy_func(window):
+            if 'stoch_k' not in window or len(window) < 1:
+                return False, {}
+            stoch_k = window['stoch_k'].iloc[-1]
+            thresh = threshold or 80
+            sig = stoch_k > thresh
+            return sig, {'strategy': strategy_name, 'value': stoch_k, 'threshold': thresh}
+        return strategy_func
+
+    elif strategy_name == "adx_strong_trend_buy" or strategy_name == "adx_strong_trend_sell":
+        def strategy_func(window):
+            if 'adx' not in window or len(window) < 1:
+                return False, {}
+            adx_val = window['adx'].iloc[-1]
+            thresh = threshold or 25
+            sig = adx_val > thresh  # Strong trend
+            return sig, {'strategy': strategy_name, 'value': adx_val, 'threshold': thresh}
+        return strategy_func
+
+    elif strategy_name == "vwap_buy":
+        def strategy_func(window):
+            if 'vwap' not in window or len(window) < 1:
+                return False, {}
+            price = window['close'].iloc[-1]
+            vwap_val = window['vwap'].iloc[-1]
+            sig = price < vwap_val  # Price below VWAP - potential buy
+            return sig, {'strategy': strategy_name, 'value': price, 'threshold': vwap_val}
+        return strategy_func
+
+    elif strategy_name == "vwap_sell":
+        def strategy_func(window):
+            if 'vwap' not in window or len(window) < 1:
+                return False, {}
+            price = window['close'].iloc[-1]
+            vwap_val = window['vwap'].iloc[-1]
+            sig = price > vwap_val  # Price above VWAP - potential sell
+            return sig, {'strategy': strategy_name, 'value': price, 'threshold': vwap_val}
+        return strategy_func
+
+    elif strategy_name == "obv_rising_buy":
+        def strategy_func(window):
+            if 'obv' not in window or len(window) < 2:
+                return False, {}
+            obv_prev = window['obv'].iloc[-2]
+            obv_curr = window['obv'].iloc[-1]
+            sig = obv_curr > obv_prev  # OBV rising
+            return sig, {'strategy': strategy_name, 'value': obv_curr}
+        return strategy_func
+
+    elif strategy_name == "obv_falling_sell":
+        def strategy_func(window):
+            if 'obv' not in window or len(window) < 2:
+                return False, {}
+            obv_prev = window['obv'].iloc[-2]
+            obv_curr = window['obv'].iloc[-1]
+            sig = obv_curr < obv_prev  # OBV falling
+            return sig, {'strategy': strategy_name, 'value': obv_curr}
+        return strategy_func
+
+    elif strategy_name == "psar_buy":
+        def strategy_func(window):
+            if 'psar_bull' not in window or len(window) < 1:
+                return False, {}
+            psar_bull = window['psar_bull'].iloc[-1]
+            sig = psar_bull is not None and not pd.isna(psar_bull)  # Bullish SAR
+            return sig, {'strategy': strategy_name, 'value': psar_bull if sig else 0}
+        return strategy_func
+
+    elif strategy_name == "psar_sell":
+        def strategy_func(window):
+            if 'psar_bear' not in window or len(window) < 1:
+                return False, {}
+            psar_bear = window['psar_bear'].iloc[-1]
+            sig = psar_bear is not None and not pd.isna(psar_bear)  # Bearish SAR
+            return sig, {'strategy': strategy_name, 'value': psar_bear if sig else 0}
+        return strategy_func
+
     else:
         # Fallback to original strategy map
         return STRATEGY_MAP.get(strategy_name, lambda window: (False, {}))
@@ -278,11 +471,16 @@ def run_backtest(
 
     # Create time ticks - only drop NaN for columns that exist
     required_cols = ["close"]
-    if 'rsi' in df.columns:
-        required_cols.append('rsi')
-    if 'macd_hist' in df.columns:
-        required_cols.append('macd_hist')
-    
+
+    # Add all indicator columns being used to required_cols
+    indicator_cols = ['rsi', 'macd', 'macd_hist', 'macd_signal',
+                      'bb_upper', 'bb_middle', 'bb_lower',
+                      'atr', 'stoch_k', 'stoch_d', 'adx', 'vwap', 'obv', 'psar']
+
+    for col in indicator_cols:
+        if col in df.columns:
+            required_cols.append(col)
+
     ticks = (
         df
         .resample(freq)
