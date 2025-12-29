@@ -1,0 +1,10 @@
+qenv/
+__pycache__/
+*.pyc
+.git/
+.env
+data/
+db/
+utils/
+frontend/
+.DS_Store
